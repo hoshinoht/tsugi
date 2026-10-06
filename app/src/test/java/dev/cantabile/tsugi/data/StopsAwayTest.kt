@@ -50,6 +50,21 @@ class StopsAwayTest {
     }
 
     @Test
+    fun locateGivesDirectionAndIndices() {
+        val located = routes.locate("D", "10", bus(1.30101), coords::get)!!
+        assertEquals(BusOnRoute(direction = 1, nearIndex = 1, targetIndex = 3), located)
+    }
+
+    @Test
+    fun cardOrderFollowsSavedOrderThenKind() {
+        val stop = Favourite.Stop("1")
+        val bus = Favourite.Service("2", "10")
+        val place = Favourite.Place("p", "Home", listOf("3"))
+        assertEquals(listOf(place, stop, bus), inCardOrder(listOf(bus, stop, place), emptyList()))
+        assertEquals(listOf(bus, place, stop), inCardOrder(listOf(stop, place, bus), listOf("group:2")))
+    }
+
+    @Test
     fun labels() {
         assertEquals("Almost here", stopsAwayLabel(0))
         assertEquals("1 stop away", stopsAwayLabel(1))
