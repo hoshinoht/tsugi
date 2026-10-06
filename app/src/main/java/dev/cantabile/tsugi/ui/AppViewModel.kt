@@ -65,6 +65,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val alertMinutes: StateFlow<Int> =
         c.settings.alertMinutes.stateIn(viewModelScope, SharingStarted.Eagerly, 2)
 
+    val recentStops: StateFlow<List<String>> =
+        c.settings.recentStops.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun addRecentStop(code: String) {
+        viewModelScope.launch { c.settings.addRecentStop(code) }
+    }
+
+    fun clearRecentStops() {
+        viewModelScope.launch { c.settings.clearRecentStops() }
+    }
+
+    /** Bus services whose number starts with [query] (e.g. "12" → 12, 12e, 120…), from the route data. */
+    fun searchServices(query: String): List<String> {
+        val q = query.trim()
+        if (q.isEmpty() || q.length > 5 || q.contains(' ')) return emptyList()
+        val services = c.routes.index.value?.byService?.keys ?: return emptyList()
+        return services.filter { it.startsWith(q, ignoreCase = true) }
+            .sortedWith(compareBy<String> { !it.equals(q, ignoreCase = true) }.then(serviceOrder))
+            .take(6)
+    }
+
     fun setStopSort(sort: StopSort) {
         viewModelScope.launch { c.settings.setStopSort(sort) }
     }

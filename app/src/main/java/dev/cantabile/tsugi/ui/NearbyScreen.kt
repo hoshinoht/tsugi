@@ -48,7 +48,7 @@ import java.time.Instant
 
 
 @Composable
-fun NearbyScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onRequestLocation: () -> Unit) {
+fun NearbyScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onRequestLocation: () -> Unit, onOpenSettings: () -> Unit) {
     val state by vm.nearby.collectAsStateWithLifecycle()
     val radius by vm.radiusM.collectAsStateWithLifecycle()
     val arrivals by vm.arrivals.collectAsStateWithLifecycle()
@@ -79,12 +79,13 @@ fun NearbyScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onRequestLocati
                 ScreenTitle(
                     "Nearby",
                     subtitle = ready?.let {
-                    listOfNotNull(
-                        it.label?.let { l -> "Near $l" },
-                        "${it.stops.size} stops within $radius m",
-                        "approximate location".takeIf { _ -> !it.precise },
-                    ).joinToString(" · ")
-                },
+                        listOfNotNull(
+                            it.label?.let { l -> "Near $l" },
+                            "${it.stops.size} stops within $radius m",
+                            "approximate location".takeIf { _ -> !it.precise },
+                        ).joinToString(" · ")
+                    },
+                    trailing = { SettingsButton(onOpenSettings) },
                 )
             }
             item { Choices(NEARBY_RADII, radius, { "$it m" }, vm::setRadius) }

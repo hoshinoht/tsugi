@@ -38,6 +38,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.cantabile.tsugi.R
 
+/** Full-screen layers over the tabs; the first set one shows (settings, then stop, service, place). */
+private data class Overlay(val stop: String?, val place: String?, val service: String?, val settings: Boolean)
+
 enum class Tab(val label: String, val icon: Int, val iconSelected: Int) {
     Saved("Saved", R.drawable.ic_star_outline, R.drawable.ic_star),
     Nearby("Nearby", R.drawable.ic_place, R.drawable.ic_place),
@@ -57,6 +60,7 @@ fun TsugiRoot(requestedStop: String? = null, onRequestHandled: () -> Unit = {}, 
     }
     var openPlace by rememberSaveable { mutableStateOf<String?>(null) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    var openService by rememberSaveable { mutableStateOf<String?>(null) }
     // Keeps each tab's remembered state (scroll position, collapsed cards) while it's off screen.
     val tabStates = rememberSaveableStateHolder()
 
@@ -72,22 +76,25 @@ fun TsugiRoot(requestedStop: String? = null, onRequestHandled: () -> Unit = {}, 
     }
 
     BackHandler(enabled = settingsOpen) { settingsOpen = false }
-    BackHandler(enabled = openPlace != null && openStop == null) { openPlace = null }
+    BackHandler(enabled = openService != null && openStop == null) { openService = null }
+    BackHandler(enabled = openPlace != null && openStop == null && openService == null) { openPlace = null }
     BackHandler(enabled = openStop != null) { openStop = null }
-    BackHandler(enabled = openStop == null && openPlace == null && tab != Tab.Saved) { tab = Tab.Saved }
+    BackHandler(enabled = openStop == null && openPlace == null && openService == null && tab != Tab.Saved) { tab = Tab.Saved }
 
     val enterSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     val exitSpec = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         AnimatedContent(
-            targetState = Triple(openStop, openPlace, settingsOpen),
+            targetState = Overlay(openStop, openPlace, openService, settingsOpen),
             transitionSpec = { fadeIn(enterSpec) togetherWith fadeOut(exitSpec) },
             label = "stop",
-        ) { (stopCode, placeId, settings) ->
+        ) { (stopCode, placeId, serviceNo, settings) ->
             if (settings) {
                 SettingsScreen(vm, onBack = { settingsOpen = false })
             } else if (stopCode != null) {
                 StopScreen(vm, stopCode, onBack = { openStop = null })
+            } else if (serviceNo != null) {
+                ServiceScreen(vm, serviceNo, onBack = { openService = null }, onOpenStop = { openStop = it })
             } else if (placeId != null) {
                 PlaceScreen(vm, placeId, onBack = { openPlace = null }, onOpenStop = { openStop = it })
             } else {
@@ -98,11 +105,16 @@ fun TsugiRoot(requestedStop: String? = null, onRequestHandled: () -> Unit = {}, 
                     tabStates.SaveableStateProvider(tab.name) {
                         when (tab) {
                             Tab.Saved -> FavouritesScreen(vm, open, onOpenPlace = { openPlace = it }, onOpenSettings = { settingsOpen = true })
-                            Tab.Nearby -> NearbyScreen(vm, open, requestLocation)
-                            Tab.Search -> SearchScreen(vm, open, onShowNearby = {
-                                vm.showNearbyAt(it)
-                                tab = Tab.Nearby
-                            })
+                            Tab.Nearby -> NearbyScreen(vm, open, requestLocation, onOpenSettings = { settingsOpen = true })
+                            Tab.Search -> SearchScreen(
+                                vm, open,
+                                onOpenService = { openService = it },
+                                onShowNearby = {
+                                    vm.showNearbyAt(it)
+                                    tab = Tab.Nearby
+                                },
+                                onOpenSettings = { settingsOpen = true },
+                            )
                         }
                     }
                     MainToolbar(

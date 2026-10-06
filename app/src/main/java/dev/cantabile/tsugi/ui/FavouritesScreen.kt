@@ -107,7 +107,7 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace
             item {
                 ScreenTitle("Favourites", trailing = {
                     if (codes.isNotEmpty()) LiveChip(latest, now, offline)
-                    IconButton(onClick = onOpenSettings) { Icon(painterResource(R.drawable.ic_settings), "Settings") }
+                    SettingsButton(onOpenSettings)
                 })
             }
             item(key = "trains") { TrainStatusCard(vm) }
