@@ -21,11 +21,13 @@ Arrivals refresh every 20 s (LTA's update rate), and only while a screen is visi
 Requirements: JDK 17+ and the Android SDK with platform 37.1.
 
 1. Get a DataMall AccountKey from LTA.
-2. Add it to `local.properties`, which is git-ignored:
-   ```properties
-   sdk.dir=/path/to/android/sdk
-   LTA_ACCOUNT_KEY=your-key-here
-   ```
+2. Provide it in any one of these places (checked in this order):
+   - an environment variable: `export LTA_ACCOUNT_KEY=your-key-here`
+   - `.env` at the repo root (git-ignored); copy `.env.example`:
+     ```sh
+     cp .env.example .env   # then fill in LTA_ACCOUNT_KEY
+     ```
+   - `local.properties` (git-ignored, also holds `sdk.dir`)
 3. Build and install on a connected phone:
    ```sh
    ./gradlew installRelease
