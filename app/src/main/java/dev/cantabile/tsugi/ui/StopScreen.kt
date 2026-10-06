@@ -1,5 +1,6 @@
 package dev.cantabile.tsugi.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.FlowRow
@@ -36,6 +37,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -66,6 +68,7 @@ fun StopScreen(
     onOpenService: (String) -> Unit = {},
 ) {
     val colors = MaterialTheme.colorScheme
+    val context = LocalContext.current
     val favourites by vm.favourites.collectAsStateWithLifecycle()
     val arrivals by vm.arrivals.collectAsStateWithLifecycle()
     val allStops by vm.stops.collectAsStateWithLifecycle()
@@ -98,6 +101,11 @@ fun StopScreen(
                     IconButton(onClick = onBack) { Icon(painterResource(R.drawable.ic_back), "Back") }
                 },
                 actions = {
+                    IconButton(onClick = {
+                        if (!vm.pinStopShortcut(code)) Toast.makeText(context, "Your launcher can't add shortcuts", Toast.LENGTH_SHORT).show()
+                    }) {
+                        Icon(painterResource(R.drawable.ic_add_home), contentDescription = "Add to home screen")
+                    }
                     FilledIconToggleButton(
                         checked = saved,
                         onCheckedChange = { showSave = true },

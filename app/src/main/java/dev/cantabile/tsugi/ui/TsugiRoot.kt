@@ -89,6 +89,7 @@ enum class Tab(val label: String, val icon: Int, val iconSelected: Int) {
 fun TsugiRoot(
     requestedStop: String? = null,
     requestedTab: String? = null,
+    requestedPlace: String? = null,
     onRequestHandled: () -> Unit = {},
     vm: AppViewModel = viewModel(),
 ) {
@@ -97,12 +98,13 @@ fun TsugiRoot(
     // Opening what's already on top does nothing, so double taps don't stack copies.
     val push: (String) -> Unit = { layer -> if (layers.lastOrNull() != layer) layers = layers + layer }
     val pop: () -> Unit = { layers = layers.dropLast(1) }
-    LaunchedEffect(requestedStop, requestedTab) {
-        if (requestedStop != null || requestedTab != null) {
+    LaunchedEffect(requestedStop, requestedTab, requestedPlace) {
+        if (requestedStop != null || requestedTab != null || requestedPlace != null) {
             Tab.entries.firstOrNull { it.name == requestedTab }?.let {
                 tab = it
                 layers = emptyList()
             }
+            requestedPlace?.let { push(Layer.place(it)) }
             requestedStop?.let { push(Layer.stop(it)) }
             onRequestHandled()
         }

@@ -37,6 +37,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.cantabile.tsugi.R
 import dev.cantabile.tsugi.data.BusStop
 import dev.cantabile.tsugi.data.MapPin
+import dev.cantabile.tsugi.data.NearbyStation
+import dev.cantabile.tsugi.data.NearbyStop
 import dev.cantabile.tsugi.data.distanceM
 import kotlin.math.roundToInt
 
@@ -107,6 +109,53 @@ fun StopMap(vm: AppViewModel, stop: BusStop, onOpenStop: (String) -> Unit, modif
                 leadingIcon = { Icon(painterResource(R.drawable.ic_chevron_right), null, Modifier.size(18.dp)) },
                 modifier = Modifier.padding(top = 8.dp),
             )
+        }
+    }
+}
+
+/** Pins this many of the closest stops, numbered to match the list. */
+const val NEARBY_MAP_PINS = 9
+
+/**
+ * Nearby on a map: numbered pins for the closest stops (matching the numbers on the list), "M" for
+ * stations and "Y" for you (or the searched place). Only fetched when the user opens it, since it
+ * sends that position, rounded to ~10 m, to OneMap.
+ */
+@Composable
+fun NearbyMap(vm: AppViewModel, center: Pair<Double, Double>, stops: List<NearbyStop>, stations: List<NearbyStation>, radiusM: Int, isYou: Boolean, modifier: Modifier = Modifier) {
+    val night = isSystemInDarkTheme()
+    val (lat, lng) = (center.first * 1e4).roundToInt() / 1e4 to (center.second * 1e4).roundToInt() / 1e4
+    val shown = stops.take(NEARBY_MAP_PINS)
+    val map by produceState<ImageBitmap?>(null, lat, lng, shown.map { it.stop.code }, stations.size, night, radiusM) {
+        val pins = shown.mapIndexed { i, s -> MapPin(s.stop.lat, s.stop.lng, "220,40,40", "${i + 1}") } +
+            stations.map { MapPin(it.station.lat, it.station.lng, "90,90,90", "M") } +
+            MapPin(lat, lng, "30,110,255", if (isYou) "Y" else "P")
+        // About the radius across the map's 256 px height: zoom 16 shows ~600 m, 15 ~1.2 km, 14 ~2.4 km.
+        val zoom = when {
+            radiusM <= 200 -> 16
+            radiusM <= 400 -> 15
+            else -> 14
+        }
+        value = vm.staticMap(lat, lng, zoom, night, pins)
+    }
+    Box(
+        modifier
+            .fillMaxWidth()
+            .aspectRatio(2f)
+            .clip(RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+        contentAlignment = Alignment.Center,
+    ) {
+        val image = map
+        if (image != null) {
+            Image(
+                image,
+                contentDescription = "Map of the ${shown.size} closest stops, numbered as in the list",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+        } else {
+            LoadingIndicator()
         }
     }
 }

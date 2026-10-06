@@ -25,6 +25,7 @@ import dev.cantabile.tsugi.data.BusStop
 import dev.cantabile.tsugi.data.distanceM
 import dev.cantabile.tsugi.data.stopsAway
 import dev.cantabile.tsugi.data.Favourite
+import dev.cantabile.tsugi.data.inCardOrder
 import dev.cantabile.tsugi.data.NearbyStop
 import dev.cantabile.tsugi.data.ServiceArrivals
 import dev.cantabile.tsugi.data.StopArrivals
@@ -37,6 +38,7 @@ import dev.cantabile.tsugi.data.placeNameFrom
 import dev.cantabile.tsugi.data.serviceOrder
 import dev.cantabile.tsugi.data.toDomain
 import dev.cantabile.tsugi.tracking.DisruptionWorker
+import dev.cantabile.tsugi.widget.Shortcuts
 import dev.cantabile.tsugi.widget.refreshFavouritesWidget
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -45,6 +47,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -71,6 +74,8 @@ sealed interface NearbyState {
         val precise: Boolean,
         val label: String? = null,
         val stations: List<NearbyStation> = emptyList(),
+        /** Where the stops are around: you, or the searched address. */
+        val center: Pair<Double, Double>? = null,
     ) : NearbyState
     data class Failed(val message: String) : NearbyState
 }
@@ -195,6 +200,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // Keep the home-screen widget in step with favourites (skips the initial load).
         viewModelScope.launch {
             c.favourites.favourites.drop(1).collect { runCatching { refreshFavouritesWidget(app) } }
+        }
+        // Long-press shortcuts follow your first saved stops and places.
+        viewModelScope.launch {
+            combine(c.favourites.favourites, c.settings.cardOrder, c.stops.stops) { favs, order, _ -> favs to order }
+                .collect { (favs, order) -> Shortcuts.updateDynamic(app, inCardOrder(favs, order)) { c.stops[it]?.description } }
         }
     }
 
@@ -344,6 +354,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Category, loop point and frequency of every service direction, once loaded. */
     val serviceInfo = c.serviceInfo.index
 
+    /** Pins a shortcut to [code] on the home screen; false if the launcher can't. */
+    fun pinStopShortcut(code: String): Boolean =
+        Shortcuts.pinStop(getApplication(), code, c.stops[code]?.description ?: code)
+
     fun toggleFavourite(favourite: Favourite) {
         viewModelScope.launch { c.favourites.toggle(favourite) }
     }
@@ -464,6 +478,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             label = locationLabel,
             // Stations are bigger than stops, so look a little further for them.
             stations = stations.value?.nearby(location.latitude, location.longitude, radiusM.value + 200).orEmpty().take(3),
+            center = location.latitude to location.longitude,
         )
     }
 }
