@@ -1,5 +1,11 @@
 package dev.cantabile.tsugi.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +36,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -38,6 +45,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.cantabile.tsugi.R
 import dev.cantabile.tsugi.data.Favourite
 import dev.cantabile.tsugi.data.allStopCodes
+import dev.cantabile.tsugi.tracking.BusTrackingService
+import dev.cantabile.tsugi.tracking.Tracked
 import dev.cantabile.tsugi.data.ServiceArrivals
 import java.time.Duration
 import java.time.Instant
@@ -53,6 +62,32 @@ fun StopScreen(vm: AppViewModel, code: String, onBack: () -> Unit) {
     val stop = vm.stop(code)
     val data = arrivals[code]
     val haptic = rememberToggleHaptic()
+    val context = LocalContext.current
+    val tracked by BusTrackingService.tracked.collectAsStateWithLifecycle()
+    // Remember which bus asked, so tracking starts once notification permission is granted.
+    var pendingTrack by rememberSaveable { mutableStateOf<String?>(null) }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        val service = pendingTrack
+        pendingTrack = null
+        if (granted && service != null) {
+            BusTrackingService.start(context, code, service)
+        } else if (!granted) {
+            Toast.makeText(context, "Allow notifications to get bus alerts", Toast.LENGTH_LONG).show()
+        }
+    }
+    val toggleTracking: (String) -> Unit = { service ->
+        val on = tracked == Tracked(code, service)
+        haptic(!on)
+        when {
+            on -> BusTrackingService.stop(context)
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED -> {
+                pendingTrack = service
+                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            else -> BusTrackingService.start(context, code, service)
+        }
+    }
     var showSave by rememberSaveable { mutableStateOf(false) }
     // Filled star if this stop is saved in any form: whole stop, a pinned bus, or part of a place.
     val saved = favourites.any { it.allStopCodes.contains(code) }
@@ -119,10 +154,16 @@ fun StopScreen(vm: AppViewModel, code: String, onBack: () -> Unit) {
                     }
                     else -> items(data.services, key = { it.serviceNo }) { service ->
                         val fav = Favourite.Service(code, service.serviceNo)
-                        ServiceCard(vm, service, now, pinned = fav in favourites, onTogglePin = {
-                            haptic(fav !in favourites)
-                            vm.toggleFavourite(fav)
-                        })
+                        ServiceCard(
+                            vm, service, now,
+                            pinned = fav in favourites,
+                            onTogglePin = {
+                                haptic(fav !in favourites)
+                                vm.toggleFavourite(fav)
+                            },
+                            tracking = tracked == Tracked(code, service.serviceNo),
+                            onToggleTracking = { toggleTracking(service.serviceNo) },
+                        )
                     }
                 }
             }
@@ -151,7 +192,15 @@ private fun RefreshProgress(fetchedAt: Instant?, now: Instant) {
 }
 
 @Composable
-private fun ServiceCard(vm: AppViewModel, service: ServiceArrivals, now: Instant, pinned: Boolean, onTogglePin: () -> Unit) {
+private fun ServiceCard(
+    vm: AppViewModel,
+    service: ServiceArrivals,
+    now: Instant,
+    pinned: Boolean,
+    onTogglePin: () -> Unit,
+    tracking: Boolean,
+    onToggleTracking: () -> Unit,
+) {
     val colors = MaterialTheme.colorScheme
     val running = service.buses.isNotEmpty()
     Surface(shape = RoundedCornerShape(24.dp), color = colors.surfaceContainer) {
@@ -166,6 +215,15 @@ private fun ServiceCard(vm: AppViewModel, service: ServiceArrivals, now: Instant
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(service.operator, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                }
+                if (running || tracking) {
+                    IconToggleButton(checked = tracking, onCheckedChange = { onToggleTracking() }) {
+                        Icon(
+                            painterResource(if (tracking) R.drawable.ic_bell_filled else R.drawable.ic_bell),
+                            contentDescription = if (tracking) "Stop alerts for ${service.serviceNo}" else "Alert me when ${service.serviceNo} is near",
+                            tint = if (tracking) colors.primary else colors.onSurfaceVariant,
+                        )
+                    }
                 }
                 IconToggleButton(checked = pinned, onCheckedChange = { onTogglePin() }) {
                     Icon(

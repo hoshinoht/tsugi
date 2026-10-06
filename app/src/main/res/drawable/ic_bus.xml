@@ -1,0 +1,7 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <!-- Bus front: body with window and headlight cut-outs, plus two wheels. Used as the notification icon. -->
+    <path android:fillColor="#FF000000" android:fillType="evenOdd"
+        android:pathData="M8,3h8a3,3 0,0 1,3 3v9a3,3 0,0 1,-3 3H8a3,3 0,0 1,-3 -3V6a3,3 0,0 1,3 -3zM8,6h8a1,1 0,0 1,1 1v3a1,1 0,0 1,-1 1H8a1,1 0,0 1,-1 -1V7a1,1 0,0 1,1 -1zM8,13.3a1.2,1.2 0,1 0,0 2.4a1.2,1.2 0,1 0,0 -2.4zM16,13.3a1.2,1.2 0,1 0,0 2.4a1.2,1.2 0,1 0,0 -2.4zM6.5,18H9v2.5a0.5,0.5 0,0 1,-0.5 0.5H7a0.5,0.5 0,0 1,-0.5 -0.5zM15,18h2.5v2.5a0.5,0.5 0,0 1,-0.5 0.5h-1.5a0.5,0.5 0,0 1,-0.5 -0.5z" />
+</vector>

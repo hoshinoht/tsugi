@@ -12,6 +12,7 @@ A lightweight Singapore bus arrivals app for Android, built natively with Kotlin
 - **Stop detail:** the next three buses for each service, with crowding, deck type, wheelchair access and a marker on timetable-based times.
 - **Search:** by stop name, road or 5-digit code, plus buildings, addresses and postal codes via [OneMap](https://www.onemap.gov.sg/) (no key needed). Pick an address to see the stops near it.
 - **Widget:** a home-screen widget with your next favourite buses.
+- **Bus alerts:** tap the bell on a bus to track it in the background. You get a live countdown notification (a Live Update with a progress bar on Android 16 QPR2+), a heads-up when it's 2 minutes away and again when it's arriving, then tracking stops.
 - **MRT/LRT status:** disruption alerts from `TrainServiceAlerts`. LTA doesn't publish live train arrivals.
 - Dynamic (wallpaper) colour, M3E motion and shapes, pull-to-refresh and haptics.
 

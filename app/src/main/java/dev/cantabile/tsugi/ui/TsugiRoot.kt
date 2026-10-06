@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -41,9 +42,15 @@ enum class Tab(val label: String, val icon: Int, val iconSelected: Int) {
 
 /** Tab + optional stop overlay. Three screens don't need a navigation library. */
 @Composable
-fun TsugiRoot(vm: AppViewModel = viewModel()) {
+fun TsugiRoot(requestedStop: String? = null, onRequestHandled: () -> Unit = {}, vm: AppViewModel = viewModel()) {
     var tab by rememberSaveable { mutableStateOf(Tab.Saved) }
     var openStop by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(requestedStop) {
+        if (requestedStop != null) {
+            openStop = requestedStop
+            onRequestHandled()
+        }
+    }
     var openPlace by rememberSaveable { mutableStateOf<String?>(null) }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
