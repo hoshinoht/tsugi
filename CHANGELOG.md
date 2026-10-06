@@ -20,7 +20,7 @@
 
 - Public holidays use the Sunday timetable.
 - Search understands spelled-out words ("station", "opposite", "primary school"), any word order and small typos.
-- Tap a bus number on a stop to open its route. Route stops show first and last buses.
+- Tap a bus number on a stop to open its route, with your stop highlighted and the next buses marked where they are. Route stops show first and last buses.
 - Screens stack, so stops and stations can open each other; back goes through them in order.
 
 ## 0.2.0

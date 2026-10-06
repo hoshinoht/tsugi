@@ -62,7 +62,7 @@
 - **Nearby:** stops and stations within 200, 400 or 800 m, using the platform location service rather than Play Services, with an optional map of the closest stops.
 - **Search:** stop names (spelled out or abbreviated, in any order, with small typos forgiven), roads, codes, bus numbers and stations, plus buildings, addresses and postal codes through OneMap.
 - **Stop map:** where the stop is and which side of the road you're on, with walking directions and a link to the stop across the road.
-- **Routes:** each bus service's stops in order, by direction, with first and last buses, category and frequency. Tap a bus number on a stop to open its route.
+- **Routes:** each bus service's stops in order, by direction, with first and last buses, category and frequency. Tap a bus number on a stop to open its route with the next buses marked on it.
 
 ### Alerts and quick access
 
