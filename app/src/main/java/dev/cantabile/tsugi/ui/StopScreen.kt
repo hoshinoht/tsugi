@@ -25,6 +25,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -34,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.cantabile.tsugi.R
 import dev.cantabile.tsugi.data.Favourite
+import dev.cantabile.tsugi.data.allStopCodes
 import dev.cantabile.tsugi.data.ServiceArrivals
 import java.time.Duration
 import java.time.Instant
@@ -48,8 +52,14 @@ fun StopScreen(vm: AppViewModel, code: String, onBack: () -> Unit) {
     val now = rememberNow(1_000)
     val stop = vm.stop(code)
     val data = arrivals[code]
-    val stopFav = Favourite.Stop(code)
     val haptic = rememberToggleHaptic()
+    var showSave by rememberSaveable { mutableStateOf(false) }
+    // Filled star if this stop is saved in any form: whole stop, a pinned bus, or part of a place.
+    val saved = favourites.any { it.allStopCodes.contains(code) }
+
+    if (showSave) {
+        SaveSheet(vm, code, data?.services.orEmpty().map { it.serviceNo }, onDismiss = { showSave = false })
+    }
 
     Scaffold(
         containerColor = colors.surface,
@@ -61,18 +71,14 @@ fun StopScreen(vm: AppViewModel, code: String, onBack: () -> Unit) {
                     IconButton(onClick = onBack) { Icon(painterResource(R.drawable.ic_back), "Back") }
                 },
                 actions = {
-                    val saved = stopFav in favourites
                     FilledIconToggleButton(
                         checked = saved,
-                        onCheckedChange = {
-                            haptic(it)
-                            vm.toggleFavourite(stopFav)
-                        },
+                        onCheckedChange = { showSave = true },
                         modifier = Modifier.padding(end = 8.dp),
                     ) {
                         Icon(
                             painterResource(if (saved) R.drawable.ic_star else R.drawable.ic_star_outline),
-                            contentDescription = if (saved) "Remove saved stop" else "Save whole stop",
+                            contentDescription = "Save options",
                         )
                     }
                 },

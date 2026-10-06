@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -25,20 +26,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.cantabile.tsugi.R
 import dev.cantabile.tsugi.data.Favourite
+import dev.cantabile.tsugi.data.allStopCodes
 import dev.cantabile.tsugi.data.ServiceArrivals
 import java.time.Instant
 
 @Composable
-fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit) {
+fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace: (String) -> Unit) {
     val favourites by vm.favourites.collectAsStateWithLifecycle()
     val arrivals by vm.arrivals.collectAsStateWithLifecycle()
     vm.stops.collectAsStateWithLifecycle() // recompose once stop names are available
-    val codes = remember(favourites) { favourites.map { it.stopCode }.distinct() }
+    val codes = remember(favourites) { favourites.flatMap { it.allStopCodes }.distinct() }
     PollArrivals(vm, codes)
     PollTrainStatus(vm)
     val now = rememberNow()
@@ -52,6 +56,7 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit) {
         .minByOrNull { it.second.eta }
         ?.first
     val wholeStops = favourites.filterIsInstance<Favourite.Stop>()
+    val places = favourites.filterIsInstance<Favourite.Place>()
     val groups = pinned.filter { it != hero }.groupBy { it.stopCode }
     val latest = codes.mapNotNull { arrivals[it]?.fetchedAt }.maxOrNull()
     val offline = codes.any { arrivals[it]?.error != null }
@@ -78,6 +83,10 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit) {
                 item(key = "hero") {
                     HeroCard(vm, hero, service(hero)!!, now, onClick = { onOpenStop(hero.stopCode) })
                 }
+            }
+
+            items(places, key = { "place-${it.id}" }) { place ->
+                PlaceCard(place, soonest(place.stopCodes, arrivals), now, onClick = { onOpenPlace(place.id) })
             }
 
             items(wholeStops, key = { "stop-${it.stopCode}" }) { fav ->
@@ -166,30 +175,7 @@ private fun WholeStopCard(vm: AppViewModel, code: String, services: List<Service
             }
             services.chunked(5).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    row.forEach { s ->
-                        val first = s.buses.firstOrNull()
-                        val arriving = first != null && minutesUntil(first.eta, now) < 1
-                        Column(
-                            Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (arriving) colors.primary else colors.surface)
-                                .padding(vertical = 6.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            val fg = when {
-                                arriving -> colors.onPrimary
-                                first == null -> colors.outline
-                                else -> colors.onSurface
-                            }
-                            Text(s.serviceNo, color = fg, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                            Text(
-                                first?.let { if (arriving) "Arr" else "${minutesUntil(it.eta, now)}m" } ?: "—",
-                                color = fg,
-                                style = MaterialTheme.typography.labelMedium,
-                            )
-                        }
-                    }
+                    row.forEach { s -> MiniTile(s, now, Modifier.weight(1f)) }
                     repeat(5 - row.size) { Box(Modifier.weight(1f)) }
                 }
             }
@@ -205,6 +191,7 @@ fun ServiceRow(
     now: Instant,
     shape: androidx.compose.ui.graphics.Shape,
     onClick: () -> Unit,
+    caption: String? = null,
 ) {
     val colors = MaterialTheme.colorScheme
     val first = service?.buses?.firstOrNull()
@@ -231,7 +218,7 @@ fun ServiceRow(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     LoadBars(first.load, colors.onSurface)
                     Text(
-                        first.load.label + if (!first.monitored) " · scheduled" else "",
+                        listOfNotNull(caption, first.load.label.ifEmpty { null }, "scheduled".takeIf { !first.monitored }).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.onSurfaceVariant,
                     )
@@ -254,6 +241,34 @@ fun ServiceRow(
                 val later = service?.buses.orEmpty().drop(1).map { minutesUntil(it.eta, now) }
                 if (later.isNotEmpty()) {
                     Text(later.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaceCard(place: Favourite.Place, board: List<Pair<String, ServiceArrivals>>, now: Instant, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Surface(onClick = onClick, shape = RoundedCornerShape(28.dp), color = colors.tertiaryContainer, contentColor = colors.onTertiaryContainer) {
+        Column(Modifier.padding(start = 18.dp, end = 14.dp, top = 14.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(place.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Place · ${place.stopCodes.size} stop${if (place.stopCodes.size == 1) "" else "s"}",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Icon(painterResource(R.drawable.ic_chevron_right), null)
+            }
+            val next = board.take(4)
+            if (next.isEmpty()) {
+                Text("No buses running right now", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    next.forEach { (_, s) -> MiniTile(s, now, Modifier.weight(1f)) }
+                    repeat(4 - next.size) { Box(Modifier.weight(1f)) }
                 }
             }
         }

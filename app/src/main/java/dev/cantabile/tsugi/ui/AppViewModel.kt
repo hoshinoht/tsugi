@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.util.UUID
 
 sealed interface StopsStatus {
     data object Loading : StopsStatus
@@ -121,6 +122,53 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun toggleFavourite(favourite: Favourite) {
         viewModelScope.launch { c.favourites.toggle(favourite) }
+    }
+
+    fun place(id: String): Favourite.Place? = favourites.value.firstOrNull { it is Favourite.Place && it.id == id } as Favourite.Place?
+
+    /** Adds [code] to an existing place, or creates a new one called [newName]. */
+    fun addToPlace(placeId: String?, code: String, newName: String = "") {
+        viewModelScope.launch {
+            c.favourites.update { list ->
+                if (placeId == null) {
+                    list + Favourite.Place(UUID.randomUUID().toString(), newName.ifBlank { suggestPlaceName(code) }, listOf(code))
+                } else {
+                    list.map { if (it is Favourite.Place && it.id == placeId && code !in it.stopCodes) it.copy(stopCodes = it.stopCodes + code) else it }
+                }
+            }
+        }
+    }
+
+    /** Removes a stop from a place; an empty place is deleted. */
+    fun removeFromPlace(placeId: String, code: String) {
+        viewModelScope.launch {
+            c.favourites.update { list ->
+                list.mapNotNull {
+                    if (it is Favourite.Place && it.id == placeId) {
+                        it.copy(stopCodes = it.stopCodes - code).takeIf { p -> p.stopCodes.isNotEmpty() }
+                    } else it
+                }
+            }
+        }
+    }
+
+    fun renamePlace(placeId: String, name: String) {
+        viewModelScope.launch {
+            c.favourites.update { list -> list.map { if (it is Favourite.Place && it.id == placeId) it.copy(name = name) else it } }
+        }
+    }
+
+    fun deletePlace(placeId: String) {
+        viewModelScope.launch { c.favourites.update { list -> list.filterNot { it is Favourite.Place && it.id == placeId } } }
+    }
+
+    /** "Opp Bugis Stn Exit C" → "Bugis Stn": drop position prefixes and exit suffixes. */
+    fun suggestPlaceName(code: String): String {
+        val name = c.stops[code]?.description ?: return code
+        return name
+            .replace(Regex("^(Opp|Aft|Bef)\\s+", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("\\s+Exit\\s+\\w+$", RegexOption.IGNORE_CASE), "")
+            .trim()
     }
 
     fun hasLocationPermission() = c.location.hasPermission()

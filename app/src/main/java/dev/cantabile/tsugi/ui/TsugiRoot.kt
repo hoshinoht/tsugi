@@ -44,6 +44,7 @@ enum class Tab(val label: String, val icon: Int, val iconSelected: Int) {
 fun TsugiRoot(vm: AppViewModel = viewModel()) {
     var tab by rememberSaveable { mutableStateOf(Tab.Saved) }
     var openStop by rememberSaveable { mutableStateOf<String?>(null) }
+    var openPlace by rememberSaveable { mutableStateOf<String?>(null) }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         if (result.values.any { it }) vm.locate() else vm.onPermissionDenied()
@@ -56,24 +57,27 @@ fun TsugiRoot(vm: AppViewModel = viewModel()) {
         }
     }
 
+    BackHandler(enabled = openPlace != null && openStop == null) { openPlace = null }
     BackHandler(enabled = openStop != null) { openStop = null }
-    BackHandler(enabled = openStop == null && tab != Tab.Saved) { tab = Tab.Saved }
+    BackHandler(enabled = openStop == null && openPlace == null && tab != Tab.Saved) { tab = Tab.Saved }
 
     val enterSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     val exitSpec = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         AnimatedContent(
-            targetState = openStop,
+            targetState = openStop to openPlace,
             transitionSpec = { fadeIn(enterSpec) togetherWith fadeOut(exitSpec) },
             label = "stop",
-        ) { stopCode ->
+        ) { (stopCode, placeId) ->
             if (stopCode != null) {
                 StopScreen(vm, stopCode, onBack = { openStop = null })
+            } else if (placeId != null) {
+                PlaceScreen(vm, placeId, onBack = { openPlace = null }, onOpenStop = { openStop = it })
             } else {
                 Box(Modifier.fillMaxSize()) {
                     val open: (String) -> Unit = { openStop = it }
                     when (tab) {
-                        Tab.Saved -> FavouritesScreen(vm, open)
+                        Tab.Saved -> FavouritesScreen(vm, open, onOpenPlace = { openPlace = it })
                         Tab.Nearby -> NearbyScreen(vm, open, requestLocation)
                         Tab.Search -> SearchScreen(vm, open)
                     }
