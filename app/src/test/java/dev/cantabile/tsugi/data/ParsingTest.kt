@@ -1,0 +1,116 @@
+package dev.cantabile.tsugi.data
+
+import kotlinx.serialization.json.Json
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.time.Instant
+
+/** Samples are taken from the LTA DataMall API User Guide v6.10. */
+class ParsingTest {
+    private val json = Json {
+        ignoreUnknownKeys = true
+        coerceInputValues = true
+    }
+
+    @Test
+    fun busArrival_parsesThreeBusesAndSkipsBlankOnes() {
+        val body = """
+            {
+              "odata.metadata": "https://datamall2.mytransport.sg/ltaodataservice/v3/BusArrival",
+              "BusStopCode": "83139",
+              "Services": [
+                {
+                  "ServiceNo": "15", "Operator": "GAS",
+                  "NextBus": {"OriginCode": "77009", "DestinationCode": "77009", "EstimatedArrival": "2024-08-14T16:41:48+08:00",
+                    "Monitored": 1, "Latitude": "1.3154918333333334", "Longitude": "103.9059125", "VisitNumber": "1",
+                    "Load": "SEA", "Feature": "WAB", "Type": "SD"},
+                  "NextBus2": {"OriginCode": "77009", "DestinationCode": "77009", "EstimatedArrival": "2024-08-14T16:55:22+08:00",
+                    "Monitored": 0, "Latitude": "0.0", "Longitude": "0.0", "VisitNumber": "1",
+                    "Load": "LSD", "Feature": "", "Type": "DD"},
+                  "NextBus3": {"OriginCode": "", "DestinationCode": "", "EstimatedArrival": "", "Monitored": 0,
+                    "Latitude": "", "Longitude": "", "VisitNumber": "", "Load": "", "Feature": "", "Type": ""}
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val service = json.decodeFromString<BusArrivalResponse>(body).services.single().toDomain()
+
+        assertEquals("15", service.serviceNo)
+        assertEquals("Go-Ahead", service.operator)
+        assertEquals(2, service.buses.size)
+        val (first, second) = service.buses
+        assertEquals(Instant.parse("2024-08-14T08:41:48Z"), first.eta)
+        assertTrue(first.monitored)
+        assertEquals(Load.Seats, first.load)
+        assertEquals(BusType.Single, first.type)
+        assertTrue(first.wheelchair)
+        assertFalse(second.monitored)
+        assertEquals(Load.Limited, second.load)
+        assertEquals(BusType.Double, second.type)
+        assertFalse(second.wheelchair)
+    }
+
+    @Test
+    fun busArrival_emptyServicesMeansNothingRunning() {
+        val response = json.decodeFromString<BusArrivalResponse>("""{"BusStopCode": "01012", "Services": []}""")
+        assertTrue(response.services.isEmpty())
+    }
+
+    @Test
+    fun trainAlerts_normal() {
+        val body = """{"odata.metadata": "x", "value": {"Status": 1, "AffectedSegments": [], "Message": []}}"""
+        val status = json.decodeFromString<TrainAlertsResponse>(body).value.toDomain(Instant.EPOCH)
+        assertFalse(status.disrupted)
+        assertTrue(status.segments.isEmpty())
+    }
+
+    @Test
+    fun trainAlerts_disruptedSegmentWithFreeBusAndMessage() {
+        val body = """
+            {"odata.metadata": "x", "value": {
+              "Status": 2,
+              "AffectedSegments": [{"Line": "NEL", "Direction": "HarbourFront", "Stations": "NE9,NE8,NE7,NE6",
+                "FreePublicBus": "NE9,NE8,NE7,NE6", "FreeMRTShuttle": "", "MRTShuttleDirection": ""}],
+              "Message": [{"Content": "1657hrs : NEL - Additional travelling time of 20 minutes.", "CreatedDate": "2017-12-11 16:57:25"}]
+            }}
+        """.trimIndent()
+        val status = json.decodeFromString<TrainAlertsResponse>(body).value.toDomain(Instant.EPOCH)
+        assertTrue(status.disrupted)
+        val segment = status.segments.single()
+        assertEquals(TrainLine.NEL, segment.line)
+        assertEquals(listOf("NE9", "NE8", "NE7", "NE6"), segment.stations)
+        assertTrue(segment.freeBus)
+        assertFalse(segment.freeShuttle)
+        assertEquals(1, status.messages.size)
+    }
+
+    @Test
+    fun trainLine_unknownCodeIsNull() {
+        assertNull(TrainLine.of("XYZ"))
+    }
+
+    @Test
+    fun serviceOrder_isNatural() {
+        val sorted = listOf("851", "12e", "2", "NR1", "12", "7").sortedWith(serviceOrder)
+        assertEquals(listOf("2", "7", "12", "12e", "851", "NR1"), sorted)
+    }
+
+    @Test
+    fun placeName_dropsPrefixesAndExits() {
+        assertEquals("Bugis Stn", placeNameFrom("Opp Bugis Stn Exit C"))
+        assertEquals("Bedok Int", placeNameFrom("Bedok Int"))
+        assertEquals("Raffles Hosp", placeNameFrom("Aft Raffles Hosp"))
+        assertEquals("Blk 208", placeNameFrom("Blk 208"))
+    }
+
+    @Test
+    fun distance_isRoughlyRight() {
+        // Bugis MRT to City Hall MRT is about 1.1 km in a straight line.
+        val d = distanceM(1.3006, 103.8559, 1.2931, 103.8520)
+        assertTrue("got $d", d in 850..1050)
+    }
+}

@@ -10,6 +10,7 @@ import dev.cantabile.tsugi.data.Favourite
 import dev.cantabile.tsugi.data.NearbyStop
 import dev.cantabile.tsugi.data.StopArrivals
 import dev.cantabile.tsugi.data.TrainStatus
+import dev.cantabile.tsugi.data.placeNameFrom
 import dev.cantabile.tsugi.data.serviceOrder
 import dev.cantabile.tsugi.data.toDomain
 import kotlinx.coroutines.async
@@ -162,14 +163,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { c.favourites.update { list -> list.filterNot { it is Favourite.Place && it.id == placeId } } }
     }
 
-    /** "Opp Bugis Stn Exit C" → "Bugis Stn": drop position prefixes and exit suffixes. */
-    fun suggestPlaceName(code: String): String {
-        val name = c.stops[code]?.description ?: return code
-        return name
-            .replace(Regex("^(Opp|Aft|Bef)\\s+", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("\\s+Exit\\s+\\w+$", RegexOption.IGNORE_CASE), "")
-            .trim()
-    }
+    fun suggestPlaceName(code: String): String = c.stops[code]?.description?.let(::placeNameFrom) ?: code
 
     fun hasLocationPermission() = c.location.hasPermission()
 

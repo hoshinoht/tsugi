@@ -32,6 +32,12 @@ sealed interface Favourite {
     }
 }
 
+/** "Opp Bugis Stn Exit C" → "Bugis Stn": drops position prefixes and exit suffixes. */
+fun placeNameFrom(stopDescription: String): String = stopDescription
+    .replace(Regex("^(Opp|Aft|Bef)\\s+", RegexOption.IGNORE_CASE), "")
+    .replace(Regex("\\s+Exit\\s+\\w+$", RegexOption.IGNORE_CASE), "")
+    .trim()
+
 /** Every stop a favourite needs arrivals for. */
 val Favourite.allStopCodes: List<String>
     get() = if (this is Favourite.Place) stopCodes else listOf(stopCode)
