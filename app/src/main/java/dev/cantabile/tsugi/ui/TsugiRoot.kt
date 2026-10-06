@@ -18,13 +18,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material3.Button
 import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.FloatingToolbarExitDirection
 import androidx.compose.material3.FloatingToolbarScrollBehavior
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -37,6 +35,25 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -156,6 +173,15 @@ fun TsugiRoot(
                             )
                         }
                     }
+                    // Fade the list into the background behind the toolbar so cards don't run into it.
+                    val surface = MaterialTheme.colorScheme.surface
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(150.dp)
+                            .background(Brush.verticalGradient(0f to surface.copy(alpha = 0f), 0.55f to surface.copy(alpha = 0.92f), 1f to surface)),
+                    )
                     MainToolbar(
                         scrollBehavior = toolbarScroll,
                         current = tab,
@@ -194,23 +220,59 @@ private fun MainToolbar(
         expanded = true,
         modifier = modifier,
         scrollBehavior = scrollBehavior,
+        // Vibrant (primary-container) colours so the toolbar stands apart from the cards behind it.
+        colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
         floatingActionButton = {
-            FloatingToolbarDefaults.StandardFloatingActionButton(onClick = onLocate) {
+            FloatingToolbarDefaults.VibrantFloatingActionButton(onClick = onLocate) {
                 Icon(painterResource(R.drawable.ic_my_location), contentDescription = "Find stops near me")
             }
         },
     ) {
-        Tab.entries.forEach { t ->
-            if (t == current) {
-                Button(onClick = {}) {
-                    Icon(painterResource(t.iconSelected), contentDescription = null)
-                    Text(t.label, Modifier.padding(start = 8.dp))
-                }
-            } else {
-                IconButton(onClick = { onSelect(t) }) {
-                    Icon(painterResource(t.icon), contentDescription = t.label)
-                }
-            }
+        Tab.entries.forEach { t -> TabPill(t, selected = t == current, onClick = { onSelect(t) }) }
+    }
+}
+
+/**
+ * A toolbar tab. The selected pill widens to show its label while the previous one narrows, both on
+ * the same M3E spatial spring, so the toolbar's total width (and its centred position) never changes.
+ * Colour and label fade with the effects spring; the icon cross-fades to filled.
+ */
+@Composable
+private fun TabPill(tab: Tab, selected: Boolean, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val motion = MaterialTheme.motionScheme
+    val idle = LocalContentColor.current
+    val width by animateDpAsState(if (selected) SELECTED_TAB_WIDTH else TAB_WIDTH, motion.defaultSpatialSpec(), label = "pillWidth")
+    val background by animateColorAsState(if (selected) colors.primary else Color.Transparent, motion.defaultEffectsSpec(), label = "pill")
+    val content by animateColorAsState(if (selected) colors.onPrimary else idle, motion.defaultEffectsSpec(), label = "pillContent")
+    val labelAlpha by animateFloatAsState(if (selected) 1f else 0f, motion.defaultEffectsSpec(), label = "pillLabel")
+    Row(
+        Modifier
+            .width(width)
+            .height(48.dp)
+            .clip(CircleShape)
+            .background(background)
+            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
+            .semantics { contentDescription = tab.label }
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Crossfade(selected, animationSpec = motion.fastEffectsSpec(), label = "tabIcon") { on ->
+            Icon(painterResource(if (on) tab.iconSelected else tab.icon), contentDescription = null, tint = content)
+        }
+        if (labelAlpha > 0f) {
+            Text(
+                tab.label,
+                color = content,
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Clip,
+                modifier = Modifier.padding(start = 8.dp).graphicsLayer { alpha = labelAlpha },
+            )
         }
     }
 }
+
+private val TAB_WIDTH = 48.dp
+private val SELECTED_TAB_WIDTH = 120.dp
