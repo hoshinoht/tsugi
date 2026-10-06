@@ -14,6 +14,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -147,78 +148,120 @@ fun TsugiRoot(
 
     val enterSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     val exitSpec = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
-    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-        AnimatedContent(
-            targetState = layers.lastOrNull(),
-            transitionSpec = { fadeIn(enterSpec) togetherWith fadeOut(exitSpec) },
-            label = "layer",
-        ) { layer ->
-            val kind = layer?.substringBefore(':')
-            val arg = layer?.substringAfter(':', "").orEmpty()
-            val openStop: (String) -> Unit = { push(Layer.stop(it)) }
-            val openStation: (String) -> Unit = { push(Layer.station(it)) }
-            if (layer != null) {
-                Box(peek) {
-                    when (kind) {
-                        "settings" -> SettingsScreen(vm, onBack = pop)
-                        "stop" -> StopScreen(vm, arg, onBack = pop, onOpenStop = openStop, onOpenStation = openStation, onOpenService = { push(Layer.service(it)) })
-                        "service" -> ServiceScreen(vm, arg, onBack = pop, onOpenStop = openStop)
-                        "place" -> PlaceScreen(vm, arg, onBack = pop, onOpenStop = openStop)
-                        "station" -> StationScreen(vm, arg, onBack = pop, onOpenStop = openStop)
-                    }
+    val openStop: (String) -> Unit = { push(Layer.stop(it)) }
+    val openStation: (String) -> Unit = { push(Layer.station(it)) }
+
+    @Composable
+    fun LayerContent(layer: String) {
+        val arg = layer.substringAfter(':', "")
+        Box(peek) {
+            when (layer.substringBefore(':')) {
+                "settings" -> SettingsScreen(vm, onBack = pop)
+                "stop" -> StopScreen(vm, arg, onBack = pop, onOpenStop = openStop, onOpenStation = openStation, onOpenService = { push(Layer.service(it)) })
+                "service" -> ServiceScreen(vm, arg, onBack = pop, onOpenStop = openStop)
+                "place" -> PlaceScreen(vm, arg, onBack = pop, onOpenStop = openStop)
+                "station" -> StationScreen(vm, arg, onBack = pop, onOpenStop = openStop)
+            }
+        }
+    }
+
+    /** [open] shows a layer from the tabs: stacked on one pane, or replacing the detail pane on two. */
+    @Composable
+    fun Tabs(open: (String) -> Unit) {
+        // The toolbar slides away while scrolling down and comes back on scroll up.
+        val toolbarScroll = FloatingToolbarDefaults.exitAlwaysScrollBehavior(FloatingToolbarExitDirection.Bottom)
+        Box(Modifier.fillMaxSize().nestedScroll(toolbarScroll)) {
+            val openSettings = { open(Layer.SETTINGS) }
+            val fromTabStop: (String) -> Unit = { open(Layer.stop(it)) }
+            val fromTabStation: (String) -> Unit = { open(Layer.station(it)) }
+            tabStates.SaveableStateProvider(tab.name) {
+                when (tab) {
+                    Tab.Saved -> FavouritesScreen(vm, fromTabStop, onOpenPlace = { open(Layer.place(it)) }, onOpenSettings = openSettings, onOpenStation = fromTabStation)
+                    Tab.Nearby -> NearbyScreen(vm, fromTabStop, requestLocation, onOpenSettings = openSettings, onOpenStation = fromTabStation)
+                    Tab.Search -> SearchScreen(
+                        vm, fromTabStop,
+                        onOpenService = { open(Layer.service(it)) },
+                        onOpenStation = fromTabStation,
+                        onShowNearby = {
+                            vm.showNearbyAt(it)
+                            tab = Tab.Nearby
+                        },
+                        onOpenSettings = openSettings,
+                    )
                 }
-            } else {
-                // The toolbar slides away while scrolling down and comes back on scroll up.
-                val toolbarScroll = FloatingToolbarDefaults.exitAlwaysScrollBehavior(FloatingToolbarExitDirection.Bottom)
-                Box(Modifier.fillMaxSize().nestedScroll(toolbarScroll)) {
-                    val open: (String) -> Unit = { push(Layer.stop(it)) }
-                    val openSettings = { push(Layer.SETTINGS) }
-                    tabStates.SaveableStateProvider(tab.name) {
-                        when (tab) {
-                            Tab.Saved -> FavouritesScreen(vm, open, onOpenPlace = { push(Layer.place(it)) }, onOpenSettings = openSettings, onOpenStation = { push(Layer.station(it)) })
-                            Tab.Nearby -> NearbyScreen(vm, open, requestLocation, onOpenSettings = openSettings, onOpenStation = { push(Layer.station(it)) })
-                            Tab.Search -> SearchScreen(
-                                vm, open,
-                                onOpenService = { push(Layer.service(it)) },
-                                onOpenStation = { push(Layer.station(it)) },
-                                onShowNearby = {
-                                    vm.showNearbyAt(it)
-                                    tab = Tab.Nearby
-                                },
-                                onOpenSettings = openSettings,
-                            )
-                        }
-                    }
-                    // Fade the list into the background behind the toolbar so cards don't run into it.
-                    val surface = MaterialTheme.colorScheme.surface
-                    Box(
-                        Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .height(150.dp)
-                            .background(Brush.verticalGradient(0f to surface.copy(alpha = 0f), 0.55f to surface.copy(alpha = 0.92f), 1f to surface)),
-                    )
-                    MainToolbar(
-                        scrollBehavior = toolbarScroll,
-                        current = tab,
-                        onSelect = { tab = it },
-                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 16.dp),
-                    )
-                    if (!vm.hasApiKey) {
-                        Surface(
-                            Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(16.dp),
-                            color = MaterialTheme.colorScheme.errorContainer,
-                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                            shape = MaterialTheme.shapes.large,
-                        ) {
-                            Text("No LTA AccountKey. Add LTA_ACCOUNT_KEY to local.properties and rebuild.", Modifier.padding(16.dp))
-                        }
-                    }
+            }
+            // Fade the list into the background behind the toolbar so cards don't run into it.
+            val surface = MaterialTheme.colorScheme.surface
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(150.dp)
+                    .background(Brush.verticalGradient(0f to surface.copy(alpha = 0f), 0.55f to surface.copy(alpha = 0.92f), 1f to surface)),
+            )
+            MainToolbar(
+                scrollBehavior = toolbarScroll,
+                current = tab,
+                onSelect = { tab = it },
+                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 16.dp),
+            )
+            if (!vm.hasApiKey) {
+                Surface(
+                    Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(16.dp),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    shape = MaterialTheme.shapes.large,
+                ) {
+                    Text("No LTA AccountKey. Add LTA_ACCOUNT_KEY to local.properties and rebuild.", Modifier.padding(16.dp))
                 }
             }
         }
     }
+
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+        BoxWithConstraints {
+            if (maxWidth >= TWO_PANE_MIN_WIDTH) {
+                // Wide screens: the tabs stay on the left and whatever you open shows on the right.
+                Row(Modifier.fillMaxSize()) {
+                    Box(Modifier.width(LIST_PANE_WIDTH).fillMaxHeight()) { Tabs(open = { layers = listOf(it) }) }
+                    Surface(
+                        Modifier.weight(1f).fillMaxHeight().padding(top = 8.dp, end = 8.dp, bottom = 8.dp),
+                        shape = RoundedCornerShape(28.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    ) {
+                        AnimatedContent(
+                            targetState = layers.lastOrNull(),
+                            transitionSpec = { fadeIn(enterSpec) togetherWith fadeOut(exitSpec) },
+                            label = "detail",
+                        ) { layer ->
+                            if (layer != null) {
+                                LayerContent(layer)
+                            } else {
+                                Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+                                    Text(
+                                        "Open a stop, station or place to see it here.",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                AnimatedContent(
+                    targetState = layers.lastOrNull(),
+                    transitionSpec = { fadeIn(enterSpec) togetherWith fadeOut(exitSpec) },
+                    label = "layer",
+                ) { layer -> if (layer != null) LayerContent(layer) else Tabs(open = push) }
+            }
+        }
+    }
 }
+
+/** From this width (Material's "expanded" window class) the tabs and the open screen sit side by side. */
+private val TWO_PANE_MIN_WIDTH = 840.dp
+private val LIST_PANE_WIDTH = 400.dp
 
 @Composable
 private fun MainToolbar(
