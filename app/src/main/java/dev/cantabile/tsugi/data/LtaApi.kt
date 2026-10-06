@@ -22,6 +22,10 @@ class LtaApi(
     suspend fun busRoutes(skip: Int): List<BusRouteDto> =
         get<BusRoutesResponse>("BusRoutes?\$skip=$skip")?.value.orEmpty()
 
+    /** One page of up to 500 service directions: category, loop point and frequency. */
+    suspend fun busServices(skip: Int): List<BusServiceDto> =
+        get<BusServicesResponse>("BusServices?\$skip=$skip")?.value.orEmpty()
+
     /** Line status and disruption alerts for the whole MRT/LRT network. */
     suspend fun trainServiceAlerts(): TrainAlertsResponse? = get("TrainServiceAlerts")
 

@@ -212,7 +212,11 @@ private fun ServiceCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Text(service.operator, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                    Text(
+                        listOfNotNull(service.operator, service.frequency.takeIf { running }).joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant,
+                    )
                 }
                 if (running || tracking) {
                     IconToggleButton(checked = tracking, onCheckedChange = { onToggleTracking() }) {
@@ -238,6 +242,16 @@ private fun ServiceCard(
                     color = colors.onSurfaceVariant,
                     modifier = Modifier.padding(start = 4.dp),
                 )
+            }
+            lastBusNotice(service, now)?.let { notice ->
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = colors.tertiaryContainer,
+                    contentColor = colors.onTertiaryContainer,
+                    modifier = Modifier.padding(start = 4.dp),
+                ) {
+                    Text(notice, Modifier.padding(horizontal = 10.dp, vertical = 4.dp), style = MaterialTheme.typography.labelLarge)
+                }
             }
             if (running) {
                 Row(Modifier.padding(end = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {

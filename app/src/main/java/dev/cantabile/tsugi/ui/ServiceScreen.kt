@@ -27,8 +27,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.cantabile.tsugi.R
+import dev.cantabile.tsugi.data.SINGAPORE
+import dev.cantabile.tsugi.data.categoryLabel
 import dev.cantabile.tsugi.data.firstBusLabel
+import dev.cantabile.tsugi.data.frequencyAt
+import dev.cantabile.tsugi.data.lastBusLabel
 import dev.cantabile.tsugi.data.operatorName
+import java.time.ZonedDateTime
 
 /** A bus service's route: its stops in order for one direction; tap a stop to open it. */
 @Composable
@@ -40,6 +45,9 @@ fun ServiceScreen(vm: AppViewModel, serviceNo: String, onBack: () -> Unit, onOpe
     var direction by rememberSaveable { mutableIntStateOf(directions.keys.minOrNull() ?: 1) }
     val route = directions[direction].orEmpty()
     val operator = route.firstOrNull()?.operator?.let(::operatorName)
+    val infoIndex by vm.serviceInfo.collectAsStateWithLifecycle()
+    val info = infoIndex?.get(serviceNo, direction)
+    val now = ZonedDateTime.now(SINGAPORE)
 
     Scaffold(
         containerColor = colors.surface,
@@ -61,10 +69,17 @@ fun ServiceScreen(vm: AppViewModel, serviceNo: String, onBack: () -> Unit, onOpe
                     Column {
                         Text("Bus $serviceNo", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold)
                         Text(
-                            listOfNotNull(operator, "${route.size} stops").joinToString(" · "),
+                            listOfNotNull(operator, info?.category?.let(::categoryLabel), "${route.size} stops").joinToString(" · "),
                             style = MaterialTheme.typography.bodyMedium,
                             color = colors.onSurfaceVariant,
                         )
+                        val running = listOfNotNull(
+                            info?.frequencyAt(now.toLocalTime())?.replaceFirstChar { it.uppercase() },
+                            info?.loop?.takeIf { it.isNotBlank() }?.let { "loops at $it" },
+                        )
+                        if (running.isNotEmpty()) {
+                            Text(running.joinToString(" · "), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+                        }
                     }
                     if (directions.size > 1) {
                         Choices(directions.keys.sorted(), direction, { d -> "to ${directions[d]?.lastOrNull()?.let { vm.stop(it.stop)?.description } ?: "direction $d"}" }) { direction = it }
@@ -82,7 +97,7 @@ fun ServiceScreen(vm: AppViewModel, serviceNo: String, onBack: () -> Unit, onOpe
                         Text("${i + 1}", style = MaterialTheme.typography.labelLarge, color = colors.onSurfaceVariant)
                     },
                     supportingContent = {
-                        Text(listOfNotNull(stop?.road, r.stop, r.firstBusLabel()?.let { "first bus $it" }).joinToString(" · "))
+                        Text(listOfNotNull(stop?.road, r.stop, r.firstBusLabel(now)?.let { "first $it" }, r.lastBusLabel(now)?.let { "last $it" }).joinToString(" · "))
                     },
                 ) { Text(stop?.description ?: r.stop) }
             }

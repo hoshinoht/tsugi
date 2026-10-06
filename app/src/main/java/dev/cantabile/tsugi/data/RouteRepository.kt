@@ -15,7 +15,6 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
-import java.time.DayOfWeek
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -75,23 +74,19 @@ class RoutesIndex(rows: List<RouteStop>) {
     fun servicesAt(stop: String): List<String> = byStop[stop].orEmpty().map { it.service }.distinct()
 }
 
-/**
- * The scheduled first bus for [stop] on today's timetable (weekday, Saturday or Sunday),
- * e.g. "6:53 am". Public holidays use the Sunday timetable in reality; we don't track them.
- */
-fun RouteStop.firstBusLabel(now: ZonedDateTime = ZonedDateTime.now(SINGAPORE)): String? {
-    val times = when (now.dayOfWeek) {
-        DayOfWeek.SATURDAY -> sat
-        DayOfWeek.SUNDAY -> sun
-        else -> wd
-    }
-    return times.getOrNull(0)?.let(::hhmmLabel)
-}
+/** The scheduled first bus for [stop] on today's timetable, e.g. "6:53 am"; public holidays run Sunday's. */
+fun RouteStop.firstBusLabel(now: ZonedDateTime = ZonedDateTime.now(SINGAPORE)): String? =
+    times(dayType(now.toLocalDate())).getOrNull(0)?.let(::hhmmLabel)
+
+/** Today's scheduled last bus at [stop], e.g. "11:42 pm". */
+fun RouteStop.lastBusLabel(now: ZonedDateTime = ZonedDateTime.now(SINGAPORE)): String? =
+    lastBusAt(now)?.toLocalTime()?.let(::timeLabel)
 
 /** "0653" → "6:53 am"; anything that isn't four digits → null. */
-fun hhmmLabel(hhmm: String): String? {
-    if (hhmm.length != 4 || !hhmm.all(Char::isDigit)) return null
-    val time = LocalTime.of(hhmm.take(2).toInt() % 24, hhmm.takeLast(2).toInt())
+fun hhmmLabel(hhmm: String): String? = parseHhmm(hhmm)?.let(::timeLabel)
+
+/** 18:05 → "6:05 pm". */
+fun timeLabel(time: LocalTime): String {
     val hour = if (time.hour % 12 == 0) 12 else time.hour % 12
     return "%d:%02d %s".format(hour, time.minute, if (time.hour < 12) "am" else "pm")
 }

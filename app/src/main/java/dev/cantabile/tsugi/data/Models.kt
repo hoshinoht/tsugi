@@ -87,6 +87,10 @@ data class ServiceArrivals(
     val buses: List<Bus>,
     /** Today's scheduled first bus at this stop, e.g. "6:53 am", for services not running now. */
     val firstBus: String? = null,
+    /** When tonight's last bus leaves this stop, from the timetable. */
+    val lastBus: Instant? = null,
+    /** How often it runs at this time of day, e.g. "every 8–12 min". */
+    val frequency: String? = null,
 )
 
 data class StopArrivals(

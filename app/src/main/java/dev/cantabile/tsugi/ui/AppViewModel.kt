@@ -17,8 +17,8 @@ import dev.cantabile.tsugi.data.ServiceArrivals
 import dev.cantabile.tsugi.data.StopArrivals
 import dev.cantabile.tsugi.data.StopSort
 import dev.cantabile.tsugi.data.ThemeMode
-import dev.cantabile.tsugi.data.firstBusLabel
-import dev.cantabile.tsugi.data.operatorName
+import dev.cantabile.tsugi.data.SINGAPORE
+import dev.cantabile.tsugi.data.withTimetable
 import dev.cantabile.tsugi.data.TrainStatus
 import dev.cantabile.tsugi.data.placeNameFrom
 import dev.cantabile.tsugi.data.serviceOrder
@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.time.ZonedDateTime
 import java.util.UUID
 
 sealed interface StopsStatus {
@@ -149,7 +150,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // they aren't running now. Once loaded, fill those into data already on screen.
         viewModelScope.launch {
             runCatching { c.routes.ensureLoaded() }
-            _arrivals.update { all -> all.mapValues { (code, a) -> a.copy(services = withScheduled(code, a.services)) } }
+            fillScheduled()
+        }
+        viewModelScope.launch {
+            runCatching { c.serviceInfo.ensureLoaded() }
+            fillScheduled()
         }
         // Keep the home-screen widget in step with favourites (skips the initial load).
         viewModelScope.launch {
@@ -208,20 +213,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /**
-     * Adds services that serve [code] but aren't in LTA's live feed (not running right now),
-     * with today's first-bus time, and sorts everything by service number.
-     */
-    private fun withScheduled(code: String, live: List<ServiceArrivals>): List<ServiceArrivals> {
-        val routes = c.routes.index.value?.byStop?.get(code).orEmpty()
-        fun firstBus(service: String) = routes.firstOrNull { it.service == service }?.firstBusLabel()
-        val present = live.map { it.serviceNo }.toSet()
-        val missing = routes.distinctBy { it.service }.filter { it.service !in present }.map {
-            ServiceArrivals(it.service, operatorName(it.operator), emptyList(), firstBus = it.firstBusLabel())
-        }
-        return (live.map { if (it.buses.isEmpty() && it.firstBus == null) it.copy(firstBus = firstBus(it.serviceNo)) else it } + missing)
-            .sortedWith(compareBy(serviceOrder) { it.serviceNo })
+    /** Adds timetable details from the cached route and service data; see [withTimetable]. */
+    private fun withScheduled(code: String, live: List<ServiceArrivals>): List<ServiceArrivals> =
+        withTimetable(live, c.routes.index.value?.byStop?.get(code).orEmpty(), c.serviceInfo.index.value, ZonedDateTime.now(SINGAPORE))
+
+    private fun fillScheduled() {
+        _arrivals.update { all -> all.mapValues { (code, a) -> a.copy(services = withScheduled(code, a.services)) } }
     }
+
+    /** Category, loop point and frequency of every service direction, once loaded. */
+    val serviceInfo = c.serviceInfo.index
 
     fun toggleFavourite(favourite: Favourite) {
         viewModelScope.launch { c.favourites.toggle(favourite) }
