@@ -1,13 +1,13 @@
 # Bus alerts
 
-Tap the bell on a bus in a stop's screen to track it. One bus is tracked at a time; tracking another replaces it.
+Tap the bell on a bus in a stop's screen, or on the Next up card, to track it. One bus is tracked at a time; tracking another replaces it.
 
 ## What you get
 
 | Notification | Channel | Behaviour |
 | --- | --- | --- |
 | Live countdown | Live bus tracking (low importance) | Ongoing; title like "12 in 4 min", destination, stop, crowding and the next bus. Tap to open the stop; **Stop** ends tracking. |
-| Approaching | Bus alerts (high importance) | Heads-up with vibration when the bus is 2 min away. |
+| Approaching | Bus alerts (high importance) | Heads-up with vibration when the bus is a set time away: 1, 2 (default), 3 or 5 min, chosen in Settings. |
 | Arriving | Bus alerts (high importance) | Heads-up when the bus is under a minute away. |
 
 On Android 16 QPR2 (API 36.1) and later the countdown is promoted to a **Live Update**: a progress bar with a bus marker, a status-bar chip showing the minutes, and lock-screen placement. On Android 16 it shows the progress bar only; earlier versions show a standard ongoing notification.
