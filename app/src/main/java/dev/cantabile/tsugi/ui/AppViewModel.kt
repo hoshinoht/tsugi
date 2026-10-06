@@ -5,12 +5,25 @@ import android.location.Location
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.cantabile.tsugi.TsugiApplication
+import android.graphics.BitmapFactory
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import dev.cantabile.tsugi.data.AddressHit
+import dev.cantabile.tsugi.data.MapPin
 import dev.cantabile.tsugi.data.BusStop
 import dev.cantabile.tsugi.data.Favourite
 import dev.cantabile.tsugi.data.NearbyStop
+import dev.cantabile.tsugi.data.ServiceArrivals
 import dev.cantabile.tsugi.data.StopArrivals
+import dev.cantabile.tsugi.data.StopSort
+import dev.cantabile.tsugi.data.ThemeMode
+import dev.cantabile.tsugi.data.firstBusLabel
+import dev.cantabile.tsugi.data.operatorName
+import dev.cantabile.tsugi.data.TrainStatus
+import dev.cantabile.tsugi.data.placeNameFrom
 import dev.cantabile.tsugi.data.serviceOrder
 import dev.cantabile.tsugi.data.toDomain
+import dev.cantabile.tsugi.widget.refreshFavouritesWidget
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -18,10 +31,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.util.UUID
 
 sealed interface StopsStatus {
     data object Loading : StopsStatus
@@ -33,7 +49,8 @@ sealed interface NearbyState {
     data object Idle : NearbyState
     data object NeedsPermission : NearbyState
     data object Locating : NearbyState
-    data class Ready(val stops: List<NearbyStop>, val precise: Boolean) : NearbyState
+    /** [label] is set when showing stops around a searched address instead of your location. */
+    data class Ready(val stops: List<NearbyStop>, val precise: Boolean, val label: String? = null) : NearbyState
     data class Failed(val message: String) : NearbyState
 }
 
@@ -45,6 +62,57 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val favourites: StateFlow<List<Favourite>> =
         c.favourites.favourites.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    val stopSort: StateFlow<StopSort> =
+        c.settings.stopSort.stateIn(viewModelScope, SharingStarted.Eagerly, StopSort.Soonest)
+    val theme: StateFlow<ThemeMode> =
+        c.settings.theme.stateIn(viewModelScope, SharingStarted.Eagerly, ThemeMode.System)
+    val alertMinutes: StateFlow<Int> =
+        c.settings.alertMinutes.stateIn(viewModelScope, SharingStarted.Eagerly, 2)
+
+    val cardOrder: StateFlow<List<String>> =
+        c.settings.cardOrder.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun saveCardOrder(ids: List<String>) {
+        viewModelScope.launch { c.settings.setCardOrder(ids) }
+    }
+
+    val recentStops: StateFlow<List<String>> =
+        c.settings.recentStops.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun addRecentStop(code: String) {
+        viewModelScope.launch { c.settings.addRecentStop(code) }
+    }
+
+    fun clearRecentStops() {
+        viewModelScope.launch { c.settings.clearRecentStops() }
+    }
+
+    /** Bus services whose number starts with [query] (e.g. "12" → 12, 12e, 120…), from the route data. */
+    fun searchServices(query: String): List<String> {
+        val q = query.trim()
+        if (q.isEmpty() || q.length > 5 || q.contains(' ')) return emptyList()
+        val services = c.routes.index.value?.byService?.keys ?: return emptyList()
+        return services.filter { it.startsWith(q, ignoreCase = true) }
+            .sortedWith(compareBy<String> { !it.equals(q, ignoreCase = true) }.then(serviceOrder))
+            .take(6)
+    }
+
+    fun setStopSort(sort: StopSort) {
+        viewModelScope.launch { c.settings.setStopSort(sort) }
+    }
+
+    fun setTheme(mode: ThemeMode) {
+        viewModelScope.launch { c.settings.setTheme(mode) }
+    }
+
+    fun setAlertMinutes(minutes: Int) {
+        viewModelScope.launch { c.settings.setAlertMinutes(minutes) }
+    }
+
+    /** False until favourites have been read from disk, so screens don't mistake "loading" for "empty". */
+    val favouritesLoaded: StateFlow<Boolean> =
+        c.favourites.favourites.map { true }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     private val _stopsStatus = MutableStateFlow<StopsStatus>(StopsStatus.Loading)
     val stopsStatus = _stopsStatus.asStateFlow()
 
@@ -54,12 +122,39 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _nearby = MutableStateFlow<NearbyState>(NearbyState.Idle)
     val nearby = _nearby.asStateFlow()
 
-    private val _radiusM = MutableStateFlow(400)
-    val radiusM = _radiusM.asStateFlow()
+    private val _trainStatus = MutableStateFlow<TrainStatus?>(null)
+    val trainStatus = _trainStatus.asStateFlow()
+
+    /** The Nearby radius; the toggle on Nearby and the Settings screen share this saved value. */
+    val radiusM: StateFlow<Int> = c.settings.nearbyRadius.stateIn(viewModelScope, SharingStarted.Eagerly, 200)
     private var lastLocation: Location? = null
+
+    private val _here = MutableStateFlow<Location?>(null)
+    /** Your last known position (not a searched address), used to pick "Next up". */
+    val here: StateFlow<Location?> = _here.asStateFlow()
+
+    /** Updates [here] quietly if location is already allowed; never prompts. */
+    fun refreshHere() {
+        if (!c.location.hasPermission()) return
+        viewModelScope.launch { c.location.current()?.let { _here.value = it } }
+    }
+    private var locationLabel: String? = null
+
+    val routes = c.routes.index
 
     init {
         loadStops()
+        viewModelScope.launch { radiusM.drop(1).collect { recomputeNearby() } }
+        // Routes list every service at a stop, including ones LTA's arrivals feed omits because
+        // they aren't running now. Once loaded, fill those into data already on screen.
+        viewModelScope.launch {
+            runCatching { c.routes.ensureLoaded() }
+            _arrivals.update { all -> all.mapValues { (code, a) -> a.copy(services = withScheduled(code, a.services)) } }
+        }
+        // Keep the home-screen widget in step with favourites (skips the initial load).
+        viewModelScope.launch {
+            c.favourites.favourites.drop(1).collect { runCatching { refreshFavouritesWidget(app) } }
+        }
     }
 
     fun loadStops() {
@@ -77,9 +172,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun search(query: String): List<BusStop> = c.stops.search(query)
 
-    /** Fetches every stop in parallel; keeps the last good data if a call fails. */
-    suspend fun refresh(codes: Collection<String>) = coroutineScope {
+    /**
+     * Fetches stops in parallel; keeps the last good data if a call fails.
+     * Skips stops fetched in the last few seconds (e.g. when switching screens) unless [force].
+     */
+    suspend fun refresh(codes: Collection<String>, force: Boolean = false) = coroutineScope {
+        val cutoff = Instant.now().minusSeconds(FRESH_SECONDS)
         codes.distinct()
+            .filter { it.isNotBlank() }
+            .filter { force || _arrivals.value[it]?.fetchedAt?.isAfter(cutoff) != true }
             .map { code -> async { code to fetch(code) } }
             .awaitAll()
             .let { results -> _arrivals.update { it + results } }
@@ -90,9 +191,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return runCatching { c.api.busArrival(code) }.fold(
             onSuccess = { response ->
                 StopArrivals(
-                    services = response?.services.orEmpty()
-                        .map { it.toDomain() }
-                        .sortedWith(compareBy(serviceOrder) { it.serviceNo }),
+                    services = withScheduled(code, response?.services.orEmpty().map { it.toDomain() }),
                     fetchedAt = Instant.now(),
                 )
             },
@@ -102,9 +201,71 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
+    /** Keeps the last known status if the call fails, so a flaky network doesn't hide a disruption. */
+    suspend fun refreshTrains() {
+        runCatching { c.api.trainServiceAlerts() }.getOrNull()?.let {
+            _trainStatus.value = it.value.toDomain(Instant.now())
+        }
+    }
+
+    /**
+     * Adds services that serve [code] but aren't in LTA's live feed (not running right now),
+     * with today's first-bus time, and sorts everything by service number.
+     */
+    private fun withScheduled(code: String, live: List<ServiceArrivals>): List<ServiceArrivals> {
+        val routes = c.routes.index.value?.byStop?.get(code).orEmpty()
+        fun firstBus(service: String) = routes.firstOrNull { it.service == service }?.firstBusLabel()
+        val present = live.map { it.serviceNo }.toSet()
+        val missing = routes.distinctBy { it.service }.filter { it.service !in present }.map {
+            ServiceArrivals(it.service, operatorName(it.operator), emptyList(), firstBus = it.firstBusLabel())
+        }
+        return (live.map { if (it.buses.isEmpty() && it.firstBus == null) it.copy(firstBus = firstBus(it.serviceNo)) else it } + missing)
+            .sortedWith(compareBy(serviceOrder) { it.serviceNo })
+    }
+
     fun toggleFavourite(favourite: Favourite) {
         viewModelScope.launch { c.favourites.toggle(favourite) }
     }
+
+    fun place(id: String): Favourite.Place? = favourites.value.firstOrNull { it is Favourite.Place && it.id == id } as Favourite.Place?
+
+    /** Adds [code] to an existing place, or creates a new one called [newName]. */
+    fun addToPlace(placeId: String?, code: String, newName: String = "") {
+        viewModelScope.launch {
+            c.favourites.update { list ->
+                if (placeId == null) {
+                    list + Favourite.Place(UUID.randomUUID().toString(), newName.ifBlank { suggestPlaceName(code) }, listOf(code))
+                } else {
+                    list.map { if (it is Favourite.Place && it.id == placeId && code !in it.stopCodes) it.copy(stopCodes = it.stopCodes + code) else it }
+                }
+            }
+        }
+    }
+
+    /** Removes a stop from a place; an empty place is deleted. */
+    fun removeFromPlace(placeId: String, code: String) {
+        viewModelScope.launch {
+            c.favourites.update { list ->
+                list.mapNotNull {
+                    if (it is Favourite.Place && it.id == placeId) {
+                        it.copy(stopCodes = it.stopCodes - code).takeIf { p -> p.stopCodes.isNotEmpty() }
+                    } else it
+                }
+            }
+        }
+    }
+
+    fun renamePlace(placeId: String, name: String) {
+        viewModelScope.launch {
+            c.favourites.update { list -> list.map { if (it is Favourite.Place && it.id == placeId) it.copy(name = name) else it } }
+        }
+    }
+
+    fun deletePlace(placeId: String) {
+        viewModelScope.launch { c.favourites.update { list -> list.filterNot { it is Favourite.Place && it.id == placeId } } }
+    }
+
+    fun suggestPlaceName(code: String): String = c.stops[code]?.description?.let(::placeNameFrom) ?: code
 
     fun hasLocationPermission() = c.location.hasPermission()
 
@@ -112,7 +273,38 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _nearby.value = NearbyState.NeedsPermission
     }
 
+    private val mapCache = android.util.LruCache<String, ImageBitmap>(12)
+
+    /** A cached OneMap static map, decoded for Compose; null if it can't be fetched. */
+    suspend fun staticMap(lat: Double, lng: Double, zoom: Int, night: Boolean, pins: List<MapPin>): ImageBitmap? {
+        val key = listOf(lat, lng, zoom, night, pins).toString()
+        mapCache.get(key)?.let { return it }
+        val bytes = runCatching { c.oneMap.staticMap(lat, lng, zoom, 512, 256, night, pins) }.getOrNull() ?: return null
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()?.also { mapCache.put(key, it) }
+    }
+
+    /** The closest stop on the same road within 80 m: usually the one across the road. */
+    fun acrossTheRoad(code: String): NearbyStop? {
+        val stop = c.stops[code] ?: return null
+        return c.stops.nearby(stop.lat, stop.lng, 80, limit = 6)
+            .firstOrNull { it.stop.code != code && it.stop.road.equals(stop.road, ignoreCase = true) }
+    }
+
+    suspend fun searchAddresses(query: String): List<AddressHit> =
+        runCatching { c.oneMap.search(query) }.getOrDefault(emptyList())
+
+    /** Shows Nearby around a searched address rather than the phone's location. */
+    fun showNearbyAt(hit: AddressHit) {
+        lastLocation = Location("onemap").apply {
+            latitude = hit.lat
+            longitude = hit.lng
+        }
+        locationLabel = hit.name
+        recomputeNearby()
+    }
+
     fun locate() {
+        locationLabel = null
         if (!c.location.hasPermission()) {
             _nearby.value = NearbyState.NeedsPermission
             return
@@ -125,13 +317,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 return@launch
             }
             lastLocation = location
+            _here.value = location
             recomputeNearby()
         }
     }
 
     fun setRadius(metres: Int) {
-        _radiusM.value = metres
-        recomputeNearby()
+        viewModelScope.launch { c.settings.setNearbyRadius(metres) }
+    }
+
+    private companion object {
+        const val FRESH_SECONDS = 10L
     }
 
     private fun recomputeNearby() {
@@ -141,8 +337,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         _nearby.value = NearbyState.Ready(
-            stops = c.stops.nearby(location.latitude, location.longitude, _radiusM.value),
-            precise = c.location.hasPreciseLocation(),
+            stops = c.stops.nearby(location.latitude, location.longitude, radiusM.value),
+            precise = locationLabel != null || c.location.hasPreciseLocation(),
+            label = locationLabel,
         )
     }
 }

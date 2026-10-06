@@ -1,3 +1,8 @@
 <resources>
     <string name="app_name">Tsugi</string>
+    <string name="widget_name">Tsugi favourites</string>
+    <string name="widget_description">Next buses for your saved stops</string>
+    <string name="shortcut_nearby">Nearby stops</string>
+    <string name="shortcut_search">Search</string>
+    <string name="tile_label">Next bus</string>
 </resources>

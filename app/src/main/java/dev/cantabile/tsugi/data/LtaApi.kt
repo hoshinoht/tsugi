@@ -18,6 +18,13 @@ class LtaApi(
     suspend fun busArrival(stopCode: String): BusArrivalResponse? =
         get("v3/BusArrival?BusStopCode=$stopCode")
 
+    /** One page of up to 500 route stops (every stop on every service). */
+    suspend fun busRoutes(skip: Int): List<BusRouteDto> =
+        get<BusRoutesResponse>("BusRoutes?\$skip=$skip")?.value.orEmpty()
+
+    /** Line status and disruption alerts for the whole MRT/LRT network. */
+    suspend fun trainServiceAlerts(): TrainAlertsResponse? = get("TrainServiceAlerts")
+
     /** One page of up to 500 stops. */
     suspend fun busStops(skip: Int): List<BusStopDto> =
         get<BusStopsResponse>("BusStops?\$skip=$skip")?.value.orEmpty()

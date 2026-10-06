@@ -6,6 +6,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -38,13 +42,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.cantabile.tsugi.R
+import dev.cantabile.tsugi.data.NEARBY_RADII
 import dev.cantabile.tsugi.data.NearbyStop
 import java.time.Instant
 
-private val RADII = listOf(200, 400, 800)
 
 @Composable
-fun NearbyScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onRequestLocation: () -> Unit) {
+fun NearbyScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onRequestLocation: () -> Unit, onOpenSettings: () -> Unit) {
     val state by vm.nearby.collectAsStateWithLifecycle()
     val radius by vm.radiusM.collectAsStateWithLifecycle()
     val arrivals by vm.arrivals.collectAsStateWithLifecycle()
@@ -55,63 +59,64 @@ fun NearbyScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onRequestLocati
         if (state == NearbyState.Idle) onRequestLocation()
     }
     val ready = state as? NearbyState.Ready
-    // Default-expand the closest stop; only the expanded stop is polled.
-    val open = expanded ?: ready?.stops?.firstOrNull()?.stop?.code
+    // null = default to the closest stop; "" = the user collapsed everything. Only the open stop is polled.
+    val open = if (expanded == null) ready?.stops?.firstOrNull()?.stop?.code else expanded?.ifEmpty { null }
     PollArrivals(vm, listOfNotNull(open))
 
-    LazyColumn(
-        Modifier.statusBarsPadding(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 140.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+    RefreshableBox(
+        onRefresh = {
+            vm.locate()
+            open?.let { vm.refresh(listOf(it), force = true) }
+        },
+        modifier = Modifier.statusBarsPadding(),
     ) {
-        item {
-            ScreenTitle(
-                "Nearby",
-                subtitle = ready?.let { "${it.stops.size} stops within $radius m" + if (!it.precise) " · approximate location" else "" },
-            )
-        }
-        item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
-                RADII.forEachIndexed { i, r ->
-                    ToggleButton(
-                        checked = r == radius,
-                        onCheckedChange = { vm.setRadius(r) },
-                        modifier = Modifier.weight(1f).semantics { role = Role.RadioButton },
-                        shapes = when (i) {
-                            0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                            RADII.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                        },
-                    ) { Text("$r m") }
-                }
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 140.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            item {
+                ScreenTitle(
+                    "Nearby",
+                    subtitle = ready?.let {
+                        listOfNotNull(
+                            it.label?.let { l -> "Near $l" },
+                            "${it.stops.size} stops within $radius m",
+                            "approximate location".takeIf { _ -> !it.precise },
+                        ).joinToString(" · ")
+                    },
+                    trailing = { SettingsButton(onOpenSettings) },
+                )
             }
-        }
+            item { Choices(NEARBY_RADII, radius, { "$it m" }, vm::setRadius) }
 
-        when (val s = state) {
-            NearbyState.Idle, NearbyState.Locating -> item {
-                Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { ContainedLoadingIndicator() }
-            }
-            NearbyState.NeedsPermission -> item {
-                MessageCard("Allow location to see bus stops around you.") {
-                    Button(onClick = onRequestLocation) { Text("Allow location") }
+            when (val s = state) {
+                NearbyState.Idle, NearbyState.Locating -> item {
+                    Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { ContainedLoadingIndicator() }
                 }
-            }
-            is NearbyState.Failed -> item {
-                MessageCard(s.message) { FilledTonalButton(onClick = onRequestLocation) { Text("Try again") } }
-            }
-            is NearbyState.Ready -> {
-                if (s.stops.isEmpty()) {
-                    item { MessageCard("No bus stops within $radius m. Try a wider radius.") }
+                NearbyState.NeedsPermission -> item {
+                    MessageCard("Allow location to see bus stops around you.") {
+                        Button(onClick = onRequestLocation) { Text("Allow location") }
+                    }
                 }
-                items(s.stops, key = { it.stop.code }) { nearby ->
-                    NearbyStopCard(
-                        nearby = nearby,
-                        isOpen = nearby.stop.code == open,
-                        services = arrivals[nearby.stop.code]?.services,
-                        now = now,
-                        onToggle = { expanded = if (nearby.stop.code == open) "" else nearby.stop.code },
-                        onOpen = { onOpenStop(nearby.stop.code) },
-                    )
+                is NearbyState.Failed -> item {
+                    MessageCard(s.message) { FilledTonalButton(onClick = onRequestLocation) { Text("Try again") } }
+                }
+                is NearbyState.Ready -> {
+                    if (s.stops.isEmpty()) {
+                        item { MessageCard("No bus stops within $radius m. Try a wider radius.") }
+                    }
+                    items(s.stops, key = { it.stop.code }) { nearby ->
+                        NearbyStopCard(
+                            nearby = nearby,
+                            isOpen = nearby.stop.code == open,
+                            services = arrivals[nearby.stop.code]?.services,
+                            now = now,
+                            // Tap a collapsed stop to expand it; tap the expanded one to open it.
+                            onToggle = { if (nearby.stop.code == open) onOpenStop(nearby.stop.code) else expanded = nearby.stop.code },
+                            onOpen = { onOpenStop(nearby.stop.code) },
+                        )
+                    }
                 }
             }
         }
@@ -164,13 +169,14 @@ private fun NearbyStopCard(
                     services == null -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { ContainedLoadingIndicator() }
                     services.isEmpty() -> Text("No buses running right now.", style = MaterialTheme.typography.bodyMedium)
                     else -> services.chunked(3).forEach { row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        // Equal-height tiles: every row sizes to its tallest tile, and text never wraps.
+                        Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             row.forEach { s ->
                                 val first = s.buses.firstOrNull()
                                 val arriving = first != null && minutesUntil(first.eta, now) < 1
                                 Surface(
                                     onClick = onOpen,
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier.weight(1f).fillMaxHeight(),
                                     shape = RoundedCornerShape(18.dp),
                                     color = if (arriving) colors.primaryContainer else colors.surface,
                                     contentColor = if (arriving) colors.onPrimaryContainer else colors.onSurface,
@@ -179,12 +185,13 @@ private fun NearbyStopCard(
                                         Text(s.serviceNo, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                         Text(
                                             when {
-                                                first == null -> "Not running"
+                                                first == null -> s.firstBus ?: "Not running"
                                                 arriving -> "Arriving"
                                                 else -> "${minutesUntil(first.eta, now)} min"
                                             },
                                             style = MaterialTheme.typography.labelLarge,
                                             color = if (arriving) colors.onPrimaryContainer else colors.onSurfaceVariant,
+                                            maxLines = 1,
                                         )
                                     }
                                 }

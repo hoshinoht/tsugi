@@ -6,8 +6,19 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-val localProps = Properties().apply {
-    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use(::load)
+/**
+ * Looks up a secret from, in order: an environment variable, `.env` at the repo root, then
+ * `local.properties`. Files are read through `providers` so the configuration cache notices edits.
+ */
+fun secret(name: String): String {
+    fun fileProps(path: String) = Properties().apply {
+        providers.fileContents(rootProject.layout.projectDirectory.file(path)).asText.orNull
+            ?.let { load(it.reader()) }
+    }
+    return providers.environmentVariable(name).orNull
+        ?: fileProps(".env").getProperty(name)?.trim()?.removeSurrounding("\"")
+        ?: fileProps("local.properties").getProperty(name)
+        ?: ""
 }
 
 android {
@@ -18,11 +29,11 @@ android {
 
     defaultConfig {
         applicationId = "dev.cantabile.tsugi"
-        minSdk = 36
+        minSdk = 31
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
-        buildConfigField("String", "LTA_ACCOUNT_KEY", "\"${localProps.getProperty("LTA_ACCOUNT_KEY", "")}\"")
+        versionCode = 2
+        versionName = "0.2.0"
+        buildConfigField("String", "LTA_ACCOUNT_KEY", "\"${secret("LTA_ACCOUNT_KEY")}\"")
     }
 
     buildTypes {
@@ -67,5 +78,11 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.glance.appwidget)
+    implementation(libs.glance.material3)
+    // Glance pulls in WorkManager 2.7.1 (Room 2.2.5), which crashes at startup on Android 17.
+    implementation(libs.work.runtime)
+    implementation(libs.reorderable)
     debugImplementation(libs.compose.ui.tooling)
+    testImplementation(libs.junit)
 }
