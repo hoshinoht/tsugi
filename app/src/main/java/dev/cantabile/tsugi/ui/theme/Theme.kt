@@ -8,7 +8,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
-/** minSdk 36, so dynamic (wallpaper) colour is always available — no static fallback. */
+/** minSdk 31 (Android 12), so dynamic (wallpaper) colour is always available — no static fallback. */
 @Composable
 fun TsugiTheme(content: @Composable () -> Unit) {
     val context = LocalContext.current

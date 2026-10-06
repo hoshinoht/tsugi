@@ -48,7 +48,7 @@ Tests: `./gradlew testDebugUnitTest`.
 
 ## Stack
 
-AGP 9.4 with built-in Kotlin, Kotlin 2.4, Compose BOM 2026.09, Material 3 `1.5.0-alpha29` (for the Expressive APIs), OkHttp, kotlinx.serialization and DataStore. minSdk 36 (Android 16).
+AGP 9.4 with built-in Kotlin, Kotlin 2.4, Compose BOM 2026.09, Material 3 `1.5.0-alpha29` (for the Expressive APIs), OkHttp, kotlinx.serialization and DataStore. minSdk 31 (Android 12): the lowest version with dynamic (wallpaper) colour.
 
 ## License
 

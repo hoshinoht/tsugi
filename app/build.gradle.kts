@@ -29,7 +29,7 @@ android {
 
     defaultConfig {
         applicationId = "dev.cantabile.tsugi"
-        minSdk = 36
+        minSdk = 31
         targetSdk = 37
         versionCode = 1
         versionName = "0.1.0"
