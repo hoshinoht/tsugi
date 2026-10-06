@@ -95,7 +95,7 @@ fun SearchScreen(
                 value = query,
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp),
-                placeholder = { Text("Stop, bus number, building or postal code") },
+                placeholder = { Text("Stops, buses or places", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 leadingIcon = { Icon(painterResource(R.drawable.ic_search), null) },
                 trailingIcon = {
                     if (query.isNotEmpty()) {

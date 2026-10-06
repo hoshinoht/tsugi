@@ -35,10 +35,12 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.width
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.Row
@@ -228,51 +230,59 @@ private fun MainToolbar(
             }
         },
     ) {
-        Tab.entries.forEach { t -> TabPill(t, selected = t == current, onClick = { onSelect(t) }) }
+        TabSlots(current, onSelect)
     }
 }
 
 /**
- * A toolbar tab. The selected pill widens to show its label while the previous one narrows, both on
- * the same M3E spatial spring, so the toolbar's total width (and its centred position) never changes.
- * Colour and label fade with the effects spring; the icon cross-fades to filled.
+ * Three fixed, equal slots with icon and label, and one highlight pill that slides between them on
+ * M3E's spatial spring. Nothing is resized or reflowed, so the toolbar and every label stay put.
  */
 @Composable
-private fun TabPill(tab: Tab, selected: Boolean, onClick: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
+private fun TabSlots(current: Tab, onSelect: (Tab) -> Unit) {
     val motion = MaterialTheme.motionScheme
-    val idle = LocalContentColor.current
-    val width by animateDpAsState(if (selected) SELECTED_TAB_WIDTH else TAB_WIDTH, motion.defaultSpatialSpec(), label = "pillWidth")
-    val background by animateColorAsState(if (selected) colors.primary else Color.Transparent, motion.defaultEffectsSpec(), label = "pill")
-    val content by animateColorAsState(if (selected) colors.onPrimary else idle, motion.defaultEffectsSpec(), label = "pillContent")
-    val labelAlpha by animateFloatAsState(if (selected) 1f else 0f, motion.defaultEffectsSpec(), label = "pillLabel")
-    Row(
-        Modifier
-            .width(width)
-            .height(48.dp)
-            .clip(CircleShape)
-            .background(background)
-            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
-            .semantics { contentDescription = tab.label }
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Crossfade(selected, animationSpec = motion.fastEffectsSpec(), label = "tabIcon") { on ->
-            Icon(painterResource(if (on) tab.iconSelected else tab.icon), contentDescription = null, tint = content)
-        }
-        if (labelAlpha > 0f) {
-            Text(
-                tab.label,
-                color = content,
-                style = MaterialTheme.typography.labelLarge,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Clip,
-                modifier = Modifier.padding(start = 8.dp).graphicsLayer { alpha = labelAlpha },
-            )
+    val offset by animateDpAsState(TAB_SLOT_WIDTH * current.ordinal, motion.defaultSpatialSpec(), label = "tabHighlight")
+    Box(Modifier.width(TAB_SLOT_WIDTH * Tab.entries.size).height(48.dp)) {
+        Box(
+            Modifier
+                .offset(x = offset)
+                .width(TAB_SLOT_WIDTH)
+                .fillMaxHeight()
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary),
+        )
+        Row {
+            Tab.entries.forEach { t -> TabSlot(t, selected = t == current, onClick = { onSelect(t) }) }
         }
     }
 }
 
-private val TAB_WIDTH = 48.dp
-private val SELECTED_TAB_WIDTH = 120.dp
+@Composable
+private fun TabSlot(tab: Tab, selected: Boolean, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val motion = MaterialTheme.motionScheme
+    val idle = LocalContentColor.current
+    val content by animateColorAsState(if (selected) colors.onPrimary else idle, motion.defaultEffectsSpec(), label = "tabContent")
+    Row(
+        Modifier
+            .width(TAB_SLOT_WIDTH)
+            .fillMaxHeight()
+            .clip(CircleShape)
+            .selectable(selected = selected, role = Role.Tab, onClick = onClick),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Crossfade(selected, animationSpec = motion.fastEffectsSpec(), label = "tabIcon") { on ->
+            Icon(painterResource(if (on) tab.iconSelected else tab.icon), contentDescription = null, tint = content, modifier = Modifier.size(20.dp))
+        }
+        Text(
+            tab.label,
+            color = content,
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 1,
+            modifier = Modifier.padding(start = 6.dp),
+        )
+    }
+}
+
+private val TAB_SLOT_WIDTH = 96.dp
