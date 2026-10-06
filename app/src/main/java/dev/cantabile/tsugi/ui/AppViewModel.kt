@@ -36,6 +36,7 @@ import dev.cantabile.tsugi.data.TrainStatus
 import dev.cantabile.tsugi.data.placeNameFrom
 import dev.cantabile.tsugi.data.serviceOrder
 import dev.cantabile.tsugi.data.toDomain
+import dev.cantabile.tsugi.tracking.DisruptionWorker
 import dev.cantabile.tsugi.widget.refreshFavouritesWidget
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -45,6 +46,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -85,6 +87,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         c.settings.stopSort.stateIn(viewModelScope, SharingStarted.Eagerly, StopSort.Soonest)
     val theme: StateFlow<ThemeMode> =
         c.settings.theme.stateIn(viewModelScope, SharingStarted.Eagerly, ThemeMode.System)
+    val disruptionAlerts: StateFlow<Boolean> =
+        c.settings.disruptionAlerts.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /** Turns background disruption checks on or off; the caller asks for notification permission first. */
+    fun setDisruptionAlerts(on: Boolean) {
+        viewModelScope.launch { c.settings.setDisruptionAlerts(on) }
+        if (on) DisruptionWorker.schedule(getApplication()) else DisruptionWorker.cancel(getApplication())
+    }
+
     val alertMinutes: StateFlow<Int> =
         c.settings.alertMinutes.stateIn(viewModelScope, SharingStarted.Eagerly, 2)
 
@@ -177,6 +188,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             runCatching { c.stations.ensureLoaded() }
             recomputeNearby()
+        }
+        viewModelScope.launch {
+            if (c.settings.disruptionAlerts.first()) DisruptionWorker.schedule(app)
         }
         // Keep the home-screen widget in step with favourites (skips the initial load).
         viewModelScope.launch {
