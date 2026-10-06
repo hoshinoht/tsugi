@@ -99,7 +99,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Turns background disruption checks on or off; the caller asks for notification permission first. */
     fun setDisruptionAlerts(on: Boolean) {
-        viewModelScope.launch { c.settings.setDisruptionAlerts(on) }
+        viewModelScope.launch {
+            c.settings.setDisruptionAlerts(on)
+            // Forget the last disruption, so turning alerts back on later doesn't say "back to normal".
+            if (!on) c.settings.setLastDisruptionKey("")
+        }
         if (on) DisruptionWorker.schedule(getApplication()) else DisruptionWorker.cancel(getApplication())
     }
 

@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -55,7 +56,14 @@ fun ServiceScreen(vm: AppViewModel, serviceNo: String, onBack: () -> Unit, onOpe
     val directions = routes?.byService?.get(serviceNo).orEmpty()
     val fromDirection = fromStop?.let { s -> directions.entries.firstOrNull { (_, r) -> r.any { it.stop == s } }?.key }
     var direction by rememberSaveable { mutableIntStateOf(fromDirection ?: directions.keys.minOrNull() ?: 1) }
-    LaunchedEffect(fromDirection) { fromDirection?.let { direction = it } }
+    // Start on the stop's direction once routes load; after that (and after rotation) keep the user's pick.
+    var startedOnStop by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(fromDirection) {
+        if (!startedOnStop && fromDirection != null) {
+            direction = fromDirection
+            startedOnStop = true
+        }
+    }
     PollArrivals(vm, listOfNotNull(fromStop))
     val clock = rememberNow()
     // Route index → the buses near that stop, in the direction shown.

@@ -2,6 +2,9 @@ package dev.cantabile.tsugi.widget
 
 import android.content.Context
 import android.content.Intent
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
@@ -23,6 +26,8 @@ import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.state.getAppWidgetState
+import androidx.glance.appwidget.state.updateAppWidgetState
+import androidx.glance.currentState
 import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
@@ -64,7 +69,19 @@ private const val MAX_ROWS = 8
 /** What a widget shows, set in [WidgetConfigActivity]: "" for all favourites, "stop:<code>" or "place:<id>". */
 val WIDGET_TARGET = stringPreferencesKey("target")
 
+/** Bumped by the refresh button so a running widget session reloads. */
+val WIDGET_REFRESH = longPreferencesKey("refresh")
+
 private data class WidgetRow(val serviceNo: String, val destination: String, val next: String, val after: String)
+
+private data class WidgetData(
+    val title: String,
+    val rows: List<WidgetRow>,
+    val status: String,
+    val empty: Boolean,
+    val idleMessage: String?,
+    val open: Intent,
+)
 
 /**
  * Next buses: by default pinned buses first, then buses from saved stops and places, soonest
@@ -76,13 +93,33 @@ class FavouritesWidget : GlanceAppWidget() {
     override val sizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
+        val state = getAppWidgetState(context, PreferencesGlanceStateDefinition, id)
+        val firstTarget = state[WIDGET_TARGET].orEmpty()
+        val firstRefresh = state[WIDGET_REFRESH] ?: 0L
+        val first = load(context, firstTarget)
+        provideContent {
+            // Glance keeps a session running for a while and update() doesn't restart provideGlance,
+            // so a new target (from setup) or a refresh tap is picked up here and reloaded.
+            val target = currentState(WIDGET_TARGET).orEmpty()
+            val refresh = currentState(WIDGET_REFRESH) ?: 0L
+            val data by produceState(first, target, refresh) {
+                if (target == firstTarget && refresh == firstRefresh && value === first) return@produceState
+                value = load(context, target)
+            }
+            GlanceTheme {
+                Content(data.title, data.rows, data.status, empty = data.empty, idleMessage = data.idleMessage, open = actionStartActivity(data.open))
+            }
+        }
+    }
+
+    /** Fetches arrivals for [target] and lays out what the widget shows. */
+    private suspend fun load(context: Context, target: String): WidgetData {
         val c = (context.applicationContext as TsugiApplication).container
         val allFavourites = c.favourites.favourites.first()
         runCatching { c.stops.ensureLoaded() }
         val now = Instant.now()
 
         // A widget set up for one stop or place shows only that; a deleted place falls back to all.
-        val target = getAppWidgetState(context, PreferencesGlanceStateDefinition, id)[WIDGET_TARGET].orEmpty()
         val place = allFavourites.firstOrNull { it is Favourite.Place && it.id == target.removePrefix("place:") } as Favourite.Place?
         val single: Favourite? = when {
             target.startsWith("stop:") -> Favourite.Stop(target.removePrefix("stop:"))
@@ -143,11 +180,7 @@ class FavouritesWidget : GlanceAppWidget() {
         } else null
         val updated = DateTimeFormatter.ofPattern("H:mm").withZone(ZoneId.systemDefault()).format(now)
 
-        provideContent {
-            GlanceTheme {
-                Content(title, rows, if (failed) "Offline · $updated" else "Updated $updated", empty = favourites.isEmpty(), idleMessage = firstBus, open = actionStartActivity(open))
-            }
-        }
+        return WidgetData(title, rows, if (failed) "Offline · $updated" else "Updated $updated", favourites.isEmpty(), firstBus, open)
     }
 
     @Composable
@@ -204,6 +237,7 @@ class FavouritesWidget : GlanceAppWidget() {
 
 class RefreshAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
+        updateAppWidgetState(context, glanceId) { it[WIDGET_REFRESH] = System.currentTimeMillis() }
         FavouritesWidget().update(context, glanceId)
     }
 }
