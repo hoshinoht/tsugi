@@ -5,7 +5,11 @@ import android.location.Location
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.cantabile.tsugi.TsugiApplication
+import android.graphics.BitmapFactory
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import dev.cantabile.tsugi.data.AddressHit
+import dev.cantabile.tsugi.data.MapPin
 import dev.cantabile.tsugi.data.BusStop
 import dev.cantabile.tsugi.data.Favourite
 import dev.cantabile.tsugi.data.NearbyStop
@@ -260,6 +264,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onPermissionDenied() {
         _nearby.value = NearbyState.NeedsPermission
+    }
+
+    private val mapCache = android.util.LruCache<String, ImageBitmap>(12)
+
+    /** A cached OneMap static map, decoded for Compose; null if it can't be fetched. */
+    suspend fun staticMap(lat: Double, lng: Double, zoom: Int, night: Boolean, pins: List<MapPin>): ImageBitmap? {
+        val key = listOf(lat, lng, zoom, night, pins).toString()
+        mapCache.get(key)?.let { return it }
+        val bytes = runCatching { c.oneMap.staticMap(lat, lng, zoom, 512, 256, night, pins) }.getOrNull() ?: return null
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()?.also { mapCache.put(key, it) }
+    }
+
+    /** The closest stop on the same road within 80 m: usually the one across the road. */
+    fun acrossTheRoad(code: String): NearbyStop? {
+        val stop = c.stops[code] ?: return null
+        return c.stops.nearby(stop.lat, stop.lng, 80, limit = 6)
+            .firstOrNull { it.stop.code != code && it.stop.road.equals(stop.road, ignoreCase = true) }
     }
 
     suspend fun searchAddresses(query: String): List<AddressHit> =

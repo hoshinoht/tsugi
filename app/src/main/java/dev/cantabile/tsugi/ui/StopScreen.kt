@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -58,12 +59,13 @@ import java.time.Duration
 import java.time.Instant
 
 @Composable
-fun StopScreen(vm: AppViewModel, code: String, onBack: () -> Unit) {
+fun StopScreen(vm: AppViewModel, code: String, onBack: () -> Unit, onOpenStop: (String) -> Unit = {}) {
     val colors = MaterialTheme.colorScheme
     val favourites by vm.favourites.collectAsStateWithLifecycle()
     val arrivals by vm.arrivals.collectAsStateWithLifecycle()
     vm.stops.collectAsStateWithLifecycle()
     PollArrivals(vm, listOf(code))
+    LaunchedEffect(code) { vm.refreshHere() }
     val now = rememberNow(1_000)
     val stop = vm.stop(code)
     val data = arrivals[code]
@@ -145,6 +147,7 @@ fun StopScreen(vm: AppViewModel, code: String, onBack: () -> Unit) {
                             style = MaterialTheme.typography.bodyMedium,
                             color = colors.onSurfaceVariant,
                         )
+                        stop?.let { StopMap(vm, it, onOpenStop, Modifier.padding(top = 12.dp)) }
                         RefreshProgress(data?.fetchedAt, now)
                         SortToggle(sort, onSort = vm::setStopSort)
                     }

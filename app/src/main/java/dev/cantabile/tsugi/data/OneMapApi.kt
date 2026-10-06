@@ -25,6 +25,9 @@ data class OneMapResult(
     @SerialName("LONGITUDE") val lng: String = "",
 )
 
+/** A map marker; [rgb] is "R,G,B" as OneMap expects. */
+data class MapPin(val lat: Double, val lng: Double, val rgb: String, val label: String)
+
 /** A building, address or postal code from OneMap. */
 data class AddressHit(val name: String, val address: String, val lat: Double, val lng: Double)
 
@@ -43,8 +46,34 @@ class OneMapApi(private val http: OkHttpClient, private val json: Json) {
         }
     }
 
+    /**
+     * A static map PNG (no token needed) centred on [lat],[lng] with coloured [pins].
+     * OneMap draws its attribution along the bottom edge, so show the image uncropped.
+     */
+    suspend fun staticMap(lat: Double, lng: Double, zoom: Int, width: Int, height: Int, night: Boolean, pins: List<MapPin>): ByteArray =
+        withContext(Dispatchers.IO) {
+            val url = STATIC_MAP_URL.toHttpUrl().newBuilder()
+                .addQueryParameter("layerchosen", if (night) "night" else "default")
+                .addQueryParameter("latitude", "$lat")
+                .addQueryParameter("longitude", "$lng")
+                .addQueryParameter("zoom", "$zoom")
+                .addQueryParameter("width", "$width")
+                .addQueryParameter("height", "$height")
+                .apply {
+                    if (pins.isNotEmpty()) {
+                        addQueryParameter("points", pins.joinToString("|") { "[${it.lat},${it.lng},\"${it.rgb}\",\"${it.label}\"]" })
+                    }
+                }
+                .build()
+            http.newCall(Request.Builder().url(url).build()).execute().use { response ->
+                if (!response.isSuccessful) throw IOException("OneMap map returned HTTP ${response.code}")
+                response.body.bytes()
+            }
+        }
+
     private companion object {
         const val SEARCH_URL = "https://www.onemap.gov.sg/api/common/elastic/search"
+        const val STATIC_MAP_URL = "https://www.onemap.gov.sg/api/staticmap/getStaticImage"
     }
 }
 

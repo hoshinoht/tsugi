@@ -92,7 +92,7 @@ fun TsugiRoot(requestedStop: String? = null, onRequestHandled: () -> Unit = {}, 
             if (settings) {
                 SettingsScreen(vm, onBack = { settingsOpen = false })
             } else if (stopCode != null) {
-                StopScreen(vm, stopCode, onBack = { openStop = null })
+                StopScreen(vm, stopCode, onBack = { openStop = null }, onOpenStop = { openStop = it })
             } else if (serviceNo != null) {
                 ServiceScreen(vm, serviceNo, onBack = { openService = null }, onOpenStop = { openStop = it })
             } else if (placeId != null) {
