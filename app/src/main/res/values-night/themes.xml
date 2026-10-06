@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.Tsugi" parent="android:Theme.Material.NoActionBar" />
+</resources>
