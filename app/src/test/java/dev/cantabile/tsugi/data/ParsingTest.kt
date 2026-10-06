@@ -220,3 +220,14 @@ class NextUpTest {
         assertEquals("20", pick!!.service.serviceNo)
     }
 }
+
+class LabelMinutesTest {
+    @Test
+    fun parsesLabelsBackToMinutes() {
+        assertEquals(5 * 60 + 29, labelMinutes("5:29 am"))
+        assertEquals(0 * 60 + 5, labelMinutes("12:05 am"))
+        assertEquals(12 * 60 + 30, labelMinutes("12:30 pm"))
+        assertEquals(23 * 60 + 6, labelMinutes(hhmmLabel("2306")!!))
+        assertNull(labelMinutes("soon"))
+    }
+}

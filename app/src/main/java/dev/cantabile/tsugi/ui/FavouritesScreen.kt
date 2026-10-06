@@ -58,6 +58,7 @@ import dev.cantabile.tsugi.R
 import dev.cantabile.tsugi.data.Favourite
 import dev.cantabile.tsugi.data.NextUp
 import dev.cantabile.tsugi.data.NextUpCandidate
+import dev.cantabile.tsugi.data.labelMinutes
 import dev.cantabile.tsugi.data.pickNextUp
 import dev.cantabile.tsugi.data.allStopCodes
 import dev.cantabile.tsugi.data.ServiceArrivals
@@ -148,6 +149,33 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace
             if (loaded && favourites.isEmpty()) {
                 item {
                     MessageCard("Nothing saved yet. Open a stop from Nearby or Search, then tap the star to save the whole stop, or the star on a bus to save just that one.")
+                }
+            }
+
+            // Overnight nothing is running: show when the first saved bus starts instead of a gap.
+            val firstBus = if (hero == null) {
+                candidates.mapNotNull { c -> c.service.firstBus?.let { label -> labelMinutes(label)?.let { Triple(it, label, c) } } }
+                    .minByOrNull { it.first }
+            } else null
+            if (firstBus != null) {
+                item(key = "first-bus") {
+                    val (_, label, c) = firstBus
+                    Surface(
+                        onClick = { onOpenStop(c.stopCode) },
+                        modifier = Modifier.animateItem(),
+                        shape = RoundedCornerShape(32.dp),
+                        color = colors.surfaceContainerHigh,
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(start = 22.dp, end = 20.dp, top = 18.dp, bottom = 18.dp)) {
+                            Text("NO BUSES RUNNING", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = colors.onSurfaceVariant)
+                            Text("First bus $label", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                            Text(
+                                "${c.service.serviceNo} at ${vm.stop(c.stopCode)?.description ?: c.stopCode}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colors.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
             }
 

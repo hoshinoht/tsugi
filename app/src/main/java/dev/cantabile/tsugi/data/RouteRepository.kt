@@ -96,6 +96,13 @@ fun hhmmLabel(hhmm: String): String? {
     return "%d:%02d %s".format(hour, time.minute, if (time.hour < 12) "am" else "pm")
 }
 
+/** "5:29 am" → minutes after midnight, for comparing first-bus times; null if unparseable. */
+fun labelMinutes(label: String): Int? {
+    val m = Regex("""^(\d{1,2}):(\d{2}) (am|pm)$""").matchEntire(label) ?: return null
+    val (h, min, half) = m.destructured
+    return (h.toInt() % 12 + if (half == "pm") 12 else 0) * 60 + min.toInt()
+}
+
 val SINGAPORE: ZoneId = ZoneId.of("Asia/Singapore")
 
 /**
