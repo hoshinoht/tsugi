@@ -31,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -47,14 +48,19 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.cantabile.tsugi.R
 import dev.cantabile.tsugi.data.Favourite
+import dev.cantabile.tsugi.data.NextUp
+import dev.cantabile.tsugi.data.NextUpCandidate
+import dev.cantabile.tsugi.data.pickNextUp
 import dev.cantabile.tsugi.data.allStopCodes
 import dev.cantabile.tsugi.data.ServiceArrivals
 import java.time.Instant
 
 @Composable
-fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace: (String) -> Unit) {
+fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace: (String) -> Unit, onOpenSettings: () -> Unit) {
     val favourites by vm.favourites.collectAsStateWithLifecycle()
     val loaded by vm.favouritesLoaded.collectAsStateWithLifecycle()
+    val here by vm.here.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { vm.refreshHere() }
     // Cards start expanded on every launch; collapsing lasts for the session (and rotation).
     var collapsed by rememberSaveable { mutableStateOf(emptyList<String>()) }
     val setCollapsed = { id: String, collapse: Boolean -> collapsed = if (collapse) collapsed + id else collapsed - id }
@@ -69,13 +75,23 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace
         arrivals[f.stopCode]?.services?.firstOrNull { it.serviceNo == f.serviceNo }
 
     val pinned = favourites.filterIsInstance<Favourite.Service>()
-    val hero = pinned
-        .mapNotNull { f -> service(f)?.buses?.firstOrNull()?.let { f to it } }
-        .minByOrNull { it.second.eta }
-        ?.first
     val wholeStops = favourites.filterIsInstance<Favourite.Stop>()
     val places = favourites.filterIsInstance<Favourite.Place>()
-    val groups = pinned.filter { it != hero }.groupBy { it.stopCode }
+    // "Next up": pinned buses, plus every service at saved whole stops and places.
+    val candidates = buildList {
+        pinned.forEach { f -> service(f)?.let { add(NextUpCandidate(f.stopCode, it, pinned = true)) } }
+        (wholeStops.map { it.stopCode } + places.flatMap { it.stopCodes }).distinct().forEach { code ->
+            arrivals[code]?.services.orEmpty().forEach { add(NextUpCandidate(code, it, pinned = false)) }
+        }
+    }
+    val hero = pickNextUp(
+        candidates,
+        stopLatLng = { code -> vm.stop(code)?.let { it.lat to it.lng } },
+        here = here?.let { it.latitude to it.longitude },
+        now = now,
+    )
+    // Don't repeat the hero's bus in its stop's pinned group.
+    val groups = pinned.filterNot { hero != null && it.stopCode == hero.stopCode && it.serviceNo == hero.service.serviceNo }.groupBy { it.stopCode }
     val latest = codes.mapNotNull { arrivals[it]?.fetchedAt }.maxOrNull()
     val offline = codes.any { arrivals[it]?.error != null }
 
@@ -88,7 +104,12 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 140.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { ScreenTitle("Favourites", trailing = { if (codes.isNotEmpty()) LiveChip(latest, now, offline) }) }
+            item {
+                ScreenTitle("Favourites", trailing = {
+                    if (codes.isNotEmpty()) LiveChip(latest, now, offline)
+                    IconButton(onClick = onOpenSettings) { Icon(painterResource(R.drawable.ic_settings), "Settings") }
+                })
+            }
             item(key = "trains") { TrainStatusCard(vm) }
 
             if (loaded && favourites.isEmpty()) {
@@ -99,7 +120,7 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace
 
             if (hero != null) {
                 item(key = "hero") {
-                    HeroCard(vm, hero, service(hero)!!, now, onClick = { onOpenStop(hero.stopCode) }, modifier = Modifier.animateItem())
+                    HeroCard(vm, hero, now, onClick = { onOpenStop(hero.stopCode) }, modifier = Modifier.animateItem())
                 }
             }
 
@@ -148,9 +169,10 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace
 }
 
 @Composable
-private fun HeroCard(vm: AppViewModel, fav: Favourite.Service, service: ServiceArrivals, now: Instant, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun HeroCard(vm: AppViewModel, nextUp: NextUp, now: Instant, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
-    val next = service.buses.first()
+    val service = nextUp.service
+    val next = nextUp.bus
     val minutes = minutesUntil(next.eta, now)
     Surface(
         onClick = onClick,
@@ -162,8 +184,12 @@ private fun HeroCard(vm: AppViewModel, fav: Favourite.Service, service: ServiceA
         Column(Modifier.padding(start = 22.dp, end = 20.dp, top = 20.dp, bottom = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f)) {
-                    Text("NEXT UP", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
-                    Text(fav.serviceNo, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.ExtraBold)
+                    Text(
+                        nextUp.distanceM?.let { "NEAREST SAVED STOP · $it M" } ?: "NEXT UP",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(service.serviceNo, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.ExtraBold)
                     Text(
                         "to ${vm.stop(next.destinationCode)?.description ?: "—"}",
                         style = MaterialTheme.typography.titleMedium,
@@ -171,7 +197,7 @@ private fun HeroCard(vm: AppViewModel, fav: Favourite.Service, service: ServiceA
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        "${vm.stop(fav.stopCode)?.description ?: ""} · ${fav.stopCode}",
+                        "${vm.stop(nextUp.stopCode)?.description ?: ""} · ${nextUp.stopCode}",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -184,7 +210,7 @@ private fun HeroCard(vm: AppViewModel, fav: Favourite.Service, service: ServiceA
                 LoadBars(next.load, colors.onPrimaryContainer)
                 Text(listOf(next.load.label, next.type.label.let { if (it.isEmpty()) it else "$it deck" }).filter { it.isNotEmpty() }.joinToString(" · "), style = MaterialTheme.typography.labelLarge)
                 Spacer(Modifier.weight(1f))
-                val later = service.buses.drop(1).map { minutesUntil(it.eta, now) }
+                val later = service.buses.dropWhile { it != next }.drop(1).map { minutesUntil(it.eta, now) }
                 if (later.isNotEmpty()) {
                     Text("then ${later.joinToString(" · ")} min", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                 }

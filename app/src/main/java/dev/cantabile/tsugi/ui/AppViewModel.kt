@@ -12,6 +12,7 @@ import dev.cantabile.tsugi.data.NearbyStop
 import dev.cantabile.tsugi.data.ServiceArrivals
 import dev.cantabile.tsugi.data.StopArrivals
 import dev.cantabile.tsugi.data.StopSort
+import dev.cantabile.tsugi.data.ThemeMode
 import dev.cantabile.tsugi.data.firstBusLabel
 import dev.cantabile.tsugi.data.operatorName
 import dev.cantabile.tsugi.data.TrainStatus
@@ -58,10 +59,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         c.favourites.favourites.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val stopSort: StateFlow<StopSort> =
-        c.favourites.stopSort.stateIn(viewModelScope, SharingStarted.Eagerly, StopSort.Soonest)
+        c.settings.stopSort.stateIn(viewModelScope, SharingStarted.Eagerly, StopSort.Soonest)
+    val theme: StateFlow<ThemeMode> =
+        c.settings.theme.stateIn(viewModelScope, SharingStarted.Eagerly, ThemeMode.System)
+    val alertMinutes: StateFlow<Int> =
+        c.settings.alertMinutes.stateIn(viewModelScope, SharingStarted.Eagerly, 2)
 
     fun setStopSort(sort: StopSort) {
-        viewModelScope.launch { c.favourites.setStopSort(sort) }
+        viewModelScope.launch { c.settings.setStopSort(sort) }
+    }
+
+    fun setTheme(mode: ThemeMode) {
+        viewModelScope.launch { c.settings.setTheme(mode) }
+    }
+
+    fun setAlertMinutes(minutes: Int) {
+        viewModelScope.launch { c.settings.setAlertMinutes(minutes) }
     }
 
     /** False until favourites have been read from disk, so screens don't mistake "loading" for "empty". */
@@ -80,15 +93,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _trainStatus = MutableStateFlow<TrainStatus?>(null)
     val trainStatus = _trainStatus.asStateFlow()
 
-    private val _radiusM = MutableStateFlow(400)
-    val radiusM = _radiusM.asStateFlow()
+    /** The Nearby radius; the toggle on Nearby and the Settings screen share this saved value. */
+    val radiusM: StateFlow<Int> = c.settings.nearbyRadius.stateIn(viewModelScope, SharingStarted.Eagerly, 200)
     private var lastLocation: Location? = null
+
+    private val _here = MutableStateFlow<Location?>(null)
+    /** Your last known position (not a searched address), used to pick "Next up". */
+    val here: StateFlow<Location?> = _here.asStateFlow()
+
+    /** Updates [here] quietly if location is already allowed; never prompts. */
+    fun refreshHere() {
+        if (!c.location.hasPermission()) return
+        viewModelScope.launch { c.location.current()?.let { _here.value = it } }
+    }
     private var locationLabel: String? = null
 
     val routes = c.routes.index
 
     init {
         loadStops()
+        viewModelScope.launch { radiusM.drop(1).collect { recomputeNearby() } }
         // Routes list every service at a stop, including ones LTA's arrivals feed omits because
         // they aren't running now. Once loaded, fill those into data already on screen.
         viewModelScope.launch {
@@ -244,13 +268,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 return@launch
             }
             lastLocation = location
+            _here.value = location
             recomputeNearby()
         }
     }
 
     fun setRadius(metres: Int) {
-        _radiusM.value = metres
-        recomputeNearby()
+        viewModelScope.launch { c.settings.setNearbyRadius(metres) }
     }
 
     private companion object {
@@ -264,7 +288,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         _nearby.value = NearbyState.Ready(
-            stops = c.stops.nearby(location.latitude, location.longitude, _radiusM.value),
+            stops = c.stops.nearby(location.latitude, location.longitude, radiusM.value),
             precise = locationLabel != null || c.location.hasPreciseLocation(),
             label = locationLabel,
         )

@@ -194,23 +194,7 @@ private fun sortServices(services: List<ServiceArrivals>, sort: StopSort, pinned
 
 @Composable
 private fun SortToggle(sort: StopSort, onSort: (StopSort) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().padding(top = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
-    ) {
-        StopSort.entries.forEachIndexed { i, option ->
-            ToggleButton(
-                checked = option == sort,
-                onCheckedChange = { onSort(option) },
-                modifier = Modifier.weight(1f).semantics { role = Role.RadioButton },
-                shapes = when (i) {
-                    0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                    StopSort.entries.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                    else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                },
-            ) { Text(option.label) }
-        }
-    }
+    Row(Modifier.padding(top = 8.dp)) { Choices(StopSort.entries, sort, { it.label }, onSort) }
 }
 
 /** Wavy bar that fills up until the next 20 s refresh. */

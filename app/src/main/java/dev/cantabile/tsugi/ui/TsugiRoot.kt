@@ -28,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,6 +56,9 @@ fun TsugiRoot(requestedStop: String? = null, onRequestHandled: () -> Unit = {}, 
         }
     }
     var openPlace by rememberSaveable { mutableStateOf<String?>(null) }
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    // Keeps each tab's remembered state (scroll position, collapsed cards) while it's off screen.
+    val tabStates = rememberSaveableStateHolder()
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         if (result.values.any { it }) vm.locate() else vm.onPermissionDenied()
@@ -67,6 +71,7 @@ fun TsugiRoot(requestedStop: String? = null, onRequestHandled: () -> Unit = {}, 
         }
     }
 
+    BackHandler(enabled = settingsOpen) { settingsOpen = false }
     BackHandler(enabled = openPlace != null && openStop == null) { openPlace = null }
     BackHandler(enabled = openStop != null) { openStop = null }
     BackHandler(enabled = openStop == null && openPlace == null && tab != Tab.Saved) { tab = Tab.Saved }
@@ -75,11 +80,13 @@ fun TsugiRoot(requestedStop: String? = null, onRequestHandled: () -> Unit = {}, 
     val exitSpec = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         AnimatedContent(
-            targetState = openStop to openPlace,
+            targetState = Triple(openStop, openPlace, settingsOpen),
             transitionSpec = { fadeIn(enterSpec) togetherWith fadeOut(exitSpec) },
             label = "stop",
-        ) { (stopCode, placeId) ->
-            if (stopCode != null) {
+        ) { (stopCode, placeId, settings) ->
+            if (settings) {
+                SettingsScreen(vm, onBack = { settingsOpen = false })
+            } else if (stopCode != null) {
                 StopScreen(vm, stopCode, onBack = { openStop = null })
             } else if (placeId != null) {
                 PlaceScreen(vm, placeId, onBack = { openPlace = null }, onOpenStop = { openStop = it })
@@ -88,13 +95,15 @@ fun TsugiRoot(requestedStop: String? = null, onRequestHandled: () -> Unit = {}, 
                 val toolbarScroll = FloatingToolbarDefaults.exitAlwaysScrollBehavior(FloatingToolbarExitDirection.Bottom)
                 Box(Modifier.fillMaxSize().nestedScroll(toolbarScroll)) {
                     val open: (String) -> Unit = { openStop = it }
-                    when (tab) {
-                        Tab.Saved -> FavouritesScreen(vm, open, onOpenPlace = { openPlace = it })
-                        Tab.Nearby -> NearbyScreen(vm, open, requestLocation)
-                        Tab.Search -> SearchScreen(vm, open, onShowNearby = {
-                            vm.showNearbyAt(it)
-                            tab = Tab.Nearby
-                        })
+                    tabStates.SaveableStateProvider(tab.name) {
+                        when (tab) {
+                            Tab.Saved -> FavouritesScreen(vm, open, onOpenPlace = { openPlace = it }, onOpenSettings = { settingsOpen = true })
+                            Tab.Nearby -> NearbyScreen(vm, open, requestLocation)
+                            Tab.Search -> SearchScreen(vm, open, onShowNearby = {
+                                vm.showNearbyAt(it)
+                                tab = Tab.Nearby
+                            })
+                        }
                     }
                     MainToolbar(
                         scrollBehavior = toolbarScroll,

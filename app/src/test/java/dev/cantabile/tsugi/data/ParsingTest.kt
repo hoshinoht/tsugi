@@ -174,3 +174,49 @@ class RoutesTest {
         assertEquals(listOf("A", "B"), index.byService.getValue("12e").getValue(1).map { it.stop })
     }
 }
+
+class NextUpTest {
+    private val now = Instant.parse("2026-10-07T10:00:00Z")
+    private fun bus(minutes: Long) = Bus(now.plusSeconds(minutes * 60), true, Load.Seats, BusType.Single, true, "X")
+    private fun svc(no: String, vararg mins: Long) = ServiceArrivals(no, "SBS Transit", mins.map { bus(it) })
+
+    // Stop A is ~110 m from "here", stop B ~1.1 km away.
+    private val here = 1.3000 to 103.8000
+    private val stops = mapOf("A" to (1.3010 to 103.8000), "B" to (1.3100 to 103.8000))
+
+    @Test
+    fun prefersNearestSavedStopOverSoonerBusFarAway() {
+        val pick = pickNextUp(
+            listOf(NextUpCandidate("B", svc("10", 1), pinned = true), NextUpCandidate("A", svc("20", 6), pinned = true)),
+            stops::get, here, now,
+        )
+        assertEquals("A", pick!!.stopCode)
+        assertTrue(pick.distanceM!! in 100..130)
+    }
+
+    @Test
+    fun skipsBusesYouCantReachInTime() {
+        // ~110 m is ~1.4 min of walking, so the bus in 1 min is skipped for the one in 9.
+        val pick = pickNextUp(listOf(NextUpCandidate("A", svc("20", 1, 9), pinned = true)), stops::get, here, now)
+        assertEquals(now.plusSeconds(9 * 60), pick!!.bus.eta)
+    }
+
+    @Test
+    fun withoutLocationFallsBackToSoonest() {
+        val pick = pickNextUp(
+            listOf(NextUpCandidate("B", svc("10", 3), pinned = true), NextUpCandidate("A", svc("20", 6), pinned = true)),
+            stops::get, null, now,
+        )
+        assertEquals("10", pick!!.service.serviceNo)
+        assertNull(pick.distanceM)
+    }
+
+    @Test
+    fun atTheSameStopPinnedBusesComeFirst() {
+        val pick = pickNextUp(
+            listOf(NextUpCandidate("A", svc("99", 3), pinned = false), NextUpCandidate("A", svc("20", 7), pinned = true)),
+            stops::get, here, now,
+        )
+        assertEquals("20", pick!!.service.serviceNo)
+    }
+}

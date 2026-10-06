@@ -19,6 +19,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.time.Duration
@@ -28,7 +29,7 @@ data class Tracked(val stopCode: String, val serviceNo: String)
 
 /**
  * Follows one bus at one stop while the app is in the background: a live countdown notification,
- * a heads-up alert when it's [APPROACH_MINUTES] away and again when it's arriving, then stops itself.
+ * a heads-up alert when it's the user's chosen number of minutes away and again when it's arriving, then stops itself.
  * One bus at a time; tracking another replaces it.
  */
 class BusTrackingService : Service() {
@@ -72,6 +73,7 @@ class BusTrackingService : Service() {
         val c = (application as TsugiApplication).container
         runCatching { c.stops.ensureLoaded() }
         val stopName = c.stops[target.stopCode]?.description ?: target.stopCode
+        val approachMinutes = c.settings.alertMinutes.first().toLong()
         val started = Instant.now()
         var startSeconds: Long? = null
         var approachSent = false
@@ -116,7 +118,7 @@ class BusTrackingService : Service() {
                 TrackingNotifications.alert(this, target, "${target.serviceNo} is arriving", "At $stopName${state.destination?.let { " · to $it" } ?: ""}")
                 arrivingAt = now
                 approachSent = true
-            } else if (!approachSent && minutes <= APPROACH_MINUTES) {
+            } else if (!approachSent && minutes <= approachMinutes) {
                 TrackingNotifications.alert(this, target, "${target.serviceNo} in $minutes min", "Head to $stopName now")
                 approachSent = true
             }
@@ -145,7 +147,6 @@ class BusTrackingService : Service() {
         const val ACTION_STOP = "dev.cantabile.tsugi.action.STOP_TRACKING"
         private const val EXTRA_STOP = "stop"
         private const val EXTRA_SERVICE = "service"
-        private const val APPROACH_MINUTES = 2L
         private val MAX_TRACKING: Duration = Duration.ofMinutes(90)
         private val NO_BUS_GIVE_UP: Duration = Duration.ofMinutes(10)
 
