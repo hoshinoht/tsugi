@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -34,6 +35,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -82,10 +85,10 @@ fun PlaceScreen(vm: AppViewModel, placeId: String, onBack: () -> Unit, onOpenSto
             LazyColumn(
                 Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = inner.calculateBottomPadding() + 24.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
             ) {
                 item {
-                    Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.padding(horizontal = 12.dp).padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Column {
                             Text(place.name, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold)
                             Text(
@@ -117,14 +120,15 @@ fun PlaceScreen(vm: AppViewModel, placeId: String, onBack: () -> Unit, onOpenSto
                     items(board.size, key = { "${board[it].first}-${board[it].second.serviceNo}" }) { i ->
                         val (code, service) = board[i]
                         ServiceRow(
-                            vm, service.serviceNo, service, now, groupShape(i, board.size),
+                            vm, service.serviceNo, service, now, ListItemDefaults.segmentedShapes(i, board.size),
+                            modifier = Modifier.animateItem(),
                             onClick = { onOpenStop(code) },
                             caption = vm.stop(code)?.description ?: code,
                         )
                     }
                 } else {
                     items(place.stopCodes, key = { it }) { code ->
-                        StopSection(vm, code, arrivals[code], now, onOpen = { onOpenStop(code) }, onRemove = { vm.removeFromPlace(placeId, code) })
+                        StopSection(Modifier.animateItem(), vm, code, arrivals[code], now, onOpen = { onOpenStop(code) }, onRemove = { vm.removeFromPlace(placeId, code) })
                     }
                 }
             }
@@ -138,9 +142,9 @@ fun soonest(codes: List<String>, arrivals: Map<String, StopArrivals>): List<Pair
         .sortedBy { it.second.buses.first().eta }
 
 @Composable
-private fun StopSection(vm: AppViewModel, code: String, data: StopArrivals?, now: Instant, onOpen: () -> Unit, onRemove: () -> Unit) {
+private fun StopSection(modifier: Modifier, vm: AppViewModel, code: String, data: StopArrivals?, now: Instant, onOpen: () -> Unit, onRemove: () -> Unit) {
     val colors = MaterialTheme.colorScheme
-    Surface(shape = RoundedCornerShape(24.dp), color = colors.surfaceContainer) {
+    Surface(modifier = modifier, shape = RoundedCornerShape(24.dp), color = colors.surfaceContainer) {
         Column(Modifier.padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -178,13 +182,16 @@ fun MiniTile(service: ServiceArrivals, now: Instant, modifier: Modifier = Modifi
     }
     Column(
         modifier
+            .clearAndSetSemantics {
+                contentDescription = "Bus ${service.serviceNo}, " + (first?.let { spokenEta(it, now) } ?: "not running")
+            }
             .clip(RoundedCornerShape(12.dp))
             .background(if (arriving) colors.primary else colors.surface)
             .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(service.serviceNo, color = fg, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Clip)
-        Text(
+        RollingText(
             first?.let { if (arriving) "Arr" else "${minutesUntil(it.eta, now)}m" } ?: "—",
             color = fg,
             style = MaterialTheme.typography.labelMedium,

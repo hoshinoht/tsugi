@@ -1,5 +1,27 @@
 package dev.cantabile.tsugi.ui
 
+import android.provider.Settings
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.toPath
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Matrix
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.graphics.shapes.Morph
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -22,7 +44,6 @@ import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -102,15 +123,7 @@ fun etaLabel(bus: Bus, now: Instant): String {
     return if (m < 1) "Arr" else m.toString()
 }
 
-/** Corner radii for a connected list: big outer corners, small inner ones. */
-fun groupShape(index: Int, count: Int, outer: Dp = 24.dp, inner: Dp = 6.dp): Shape = when {
-    count == 1 -> RoundedCornerShape(outer)
-    index == 0 -> RoundedCornerShape(outer, outer, inner, inner)
-    index == count - 1 -> RoundedCornerShape(inner, inner, outer, outer)
-    else -> RoundedCornerShape(inner)
-}
-
-/** Same idea, horizontally, for a row of tiles. */
+/** Corner radii for a connected row of tiles: big outer corners, small inner ones. */
 fun rowShape(index: Int, count: Int, outer: Dp = 16.dp, inner: Dp = 6.dp): Shape = when {
     count == 1 -> RoundedCornerShape(outer)
     index == 0 -> RoundedCornerShape(outer, inner, inner, outer)
@@ -169,34 +182,103 @@ fun LoadBars(load: Load, color: Color, modifier: Modifier = Modifier) {
     }
 }
 
-/** The signature countdown: a 9-sided cookie that slowly spins while the bus is arriving. */
+/**
+ * The signature countdown: a 9-sided cookie that morphs into a soft burst and slowly spins once the
+ * bus is arriving. The number rolls as it changes.
+ */
 @Composable
 fun CookieCountdown(value: String, unit: String?, modifier: Modifier = Modifier, size: Dp = 112.dp) {
     val colors = MaterialTheme.colorScheme
     val arriving = unit == null
-    val rotation = if (arriving) {
-        val t = rememberInfiniteTransition(label = "cookie")
-        t.animateFloat(0f, 360f, infiniteRepeatable(tween(12_000, easing = LinearEasing), RepeatMode.Restart), label = "spin").value
+    val reducedMotion = rememberReducedMotion()
+    val morph = remember { Morph(MaterialShapes.Cookie9Sided, MaterialShapes.SoftBurst) }
+    val progress by animateFloatAsState(
+        targetValue = if (arriving) 1f else 0f,
+        animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(),
+        label = "cookieMorph",
+    )
+    val rotation = if (arriving && !reducedMotion) {
+        rememberInfiniteTransition(label = "cookie")
+            .animateFloat(0f, 360f, infiniteRepeatable(tween(12_000, easing = LinearEasing), RepeatMode.Restart), label = "spin")
+            .value
     } else 0f
-    Box(modifier.size(size), contentAlignment = Alignment.Center) {
+    Box(
+        modifier
+            .size(size)
+            .clearAndSetSemantics { contentDescription = if (arriving) "Arriving" else "$value $unit" },
+        contentAlignment = Alignment.Center,
+    ) {
         Box(
             Modifier
                 .size(size)
                 .graphicsLayer { rotationZ = rotation }
-                .clip(MaterialShapes.Cookie9Sided.toShape())
+                .clip(MorphShape(morph, progress))
                 .background(colors.primary),
         )
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
+            RollingText(
                 value,
                 color = colors.onPrimary,
                 style = if (arriving) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.ExtraBold,
             )
-            if (unit != null) {
-                Text(unit, color = colors.onPrimary, style = MaterialTheme.typography.labelLarge)
+            AnimatedVisibility(visible = unit != null) {
+                Text(unit.orEmpty(), color = colors.onPrimary, style = MaterialTheme.typography.labelLarge)
             }
         }
+    }
+}
+
+/** Draws a [Morph] between two normalised Material shapes at [progress], scaled to the layout size. */
+private class MorphShape(private val morph: Morph, private val progress: Float) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        val path = morph.toPath(progress)
+        path.transform(Matrix().apply { scale(size.width, size.height) })
+        return Outline.Generic(path)
+    }
+}
+
+/**
+ * Text that rolls like an odometer when it changes: falling numbers come up from below,
+ * rising ones drop from above. Used for every arrival time so refreshes are visible.
+ */
+@Composable
+fun RollingText(
+    text: String,
+    modifier: Modifier = Modifier,
+    style: TextStyle = LocalTextStyle.current,
+    color: Color = Color.Unspecified,
+    fontWeight: FontWeight? = null,
+) {
+    val slide = MaterialTheme.motionScheme.fastSpatialSpec<IntOffset>()
+    val fade = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
+    AnimatedContent(
+        targetState = text,
+        modifier = modifier,
+        transitionSpec = {
+            val falling = targetState == "Arr" ||
+                (targetState.toIntOrNull() ?: Int.MAX_VALUE) < (initialState.toIntOrNull() ?: Int.MAX_VALUE)
+            val dir = if (falling) 1 else -1
+            (slideInVertically(slide) { dir * it } + fadeIn(fade)) togetherWith
+                (slideOutVertically(slide) { -dir * it } + fadeOut(fade)) using SizeTransform(clip = true)
+        },
+        label = "rolling",
+    ) { Text(it, style = style, color = color, fontWeight = fontWeight) }
+}
+
+/** True when the user turned on "Remove animations"; decorative motion should stop. */
+@Composable
+fun rememberReducedMotion(): Boolean {
+    val resolver = LocalContext.current.contentResolver
+    return remember(resolver) { Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }
+}
+
+fun spokenEta(bus: Bus, now: Instant): String {
+    val m = minutesUntil(bus.eta, now)
+    return when {
+        m < 1 -> "arriving"
+        m == 1L -> "1 minute"
+        else -> "$m minutes"
     }
 }
 
@@ -217,8 +299,16 @@ fun ArrivalTile(bus: Bus, now: Instant, shape: Shape, modifier: Modifier = Modif
     val arriving = minutesUntil(bus.eta, now) < 1
     val bg = if (arriving) colors.primary else colors.surface
     val fg = if (arriving) colors.onPrimary else colors.onSurface
+    val description = listOfNotNull(
+        spokenEta(bus, now),
+        bus.load.label.ifEmpty { null }?.lowercase(),
+        bus.type.label.ifEmpty { null }?.let { "${it.lowercase()} deck" },
+        "wheelchair accessible".takeIf { bus.wheelchair },
+        "scheduled time, not live".takeIf { !bus.monitored },
+    ).joinToString(", ")
     Column(
         modifier
+            .clearAndSetSemantics { contentDescription = description }
             .clip(shape)
             .background(bg)
             .then(if (!bus.monitored) Modifier.dashedOutline(shape, colors.outline) else Modifier)
@@ -226,7 +316,7 @@ fun ArrivalTile(bus: Bus, now: Instant, shape: Shape, modifier: Modifier = Modif
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(etaLabel(bus, now), color = fg, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            RollingText(etaLabel(bus, now), color = fg, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             if (!arriving) {
                 Text(
                     "min",

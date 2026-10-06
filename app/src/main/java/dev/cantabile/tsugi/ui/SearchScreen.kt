@@ -20,7 +20,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -38,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.cantabile.tsugi.R
@@ -63,7 +66,7 @@ fun SearchScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onShowNearby: (
     LazyColumn(
         Modifier.statusBarsPadding(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 140.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
+        verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
     ) {
         item {
             TextField(
@@ -110,24 +113,15 @@ fun SearchScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onShowNearby: (
                 if (addresses.isNotEmpty()) {
                     item { SearchSection("Places & addresses") }
                     itemsIndexed(addresses, key = { i, a -> "addr-$i-${a.name}" }) { i, hit ->
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 64.dp)
-                                .clip(groupShape(i, addresses.size, outer = 22.dp))
-                                .background(colors.surfaceContainer)
-                                .clickable { onShowNearby(hit) }
-                                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        ) {
-                            Icon(painterResource(R.drawable.ic_place), null, tint = colors.primary)
-                            Column(Modifier.weight(1f)) {
-                                Text(hit.name, style = MaterialTheme.typography.titleMedium)
-                                Text(hit.address, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, maxLines = 1)
-                            }
-                            Text("Stops near", style = MaterialTheme.typography.labelLarge, color = colors.primary)
-                        }
+                        SegmentedListItem(
+                            onClick = { onShowNearby(hit) },
+                            shapes = ListItemDefaults.segmentedShapes(i, addresses.size),
+                            modifier = Modifier.animateItem(),
+                            colors = ListItemDefaults.segmentedColors(containerColor = colors.surfaceContainer),
+                            leadingContent = { Icon(painterResource(R.drawable.ic_place), null, tint = colors.primary) },
+                            supportingContent = { Text(hit.address, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            trailingContent = { Text("Stops near", style = MaterialTheme.typography.labelLarge, color = colors.primary) },
+                        ) { Text(hit.name) }
                     }
                     if (results.isNotEmpty()) item { SearchSection("Bus stops") }
                 }
@@ -135,28 +129,21 @@ fun SearchScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onShowNearby: (
                     item { Text("No stops match “$query”.", Modifier.padding(8.dp), color = colors.onSurfaceVariant) }
                 }
                 itemsIndexed(results, key = { _, stop -> stop.code }) { i, stop ->
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 64.dp)
-                            .clip(groupShape(i, results.size, outer = 22.dp))
-                            .background(colors.surfaceContainer)
-                            .clickable { onOpenStop(stop.code) }
-                            .padding(start = 12.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    ) {
-                        Box(
-                            Modifier.size(width = 64.dp, height = 40.dp).clip(RoundedCornerShape(12.dp)).background(colors.surface),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(stop.code, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                        }
-                        Column(Modifier.weight(1f)) {
-                            Text(stop.description, style = MaterialTheme.typography.titleMedium)
-                            Text(stop.road, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
-                        }
-                    }
+                    SegmentedListItem(
+                        onClick = { onOpenStop(stop.code) },
+                        shapes = ListItemDefaults.segmentedShapes(i, results.size),
+                        modifier = Modifier.animateItem(),
+                        colors = ListItemDefaults.segmentedColors(containerColor = colors.surfaceContainer),
+                        leadingContent = {
+                            Box(
+                                Modifier.size(width = 64.dp, height = 40.dp).clip(RoundedCornerShape(12.dp)).background(colors.surface),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(stop.code, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                            }
+                        },
+                        supportingContent = { Text(stop.road) },
+                    ) { Text(stop.description) }
                 }
             }
         }

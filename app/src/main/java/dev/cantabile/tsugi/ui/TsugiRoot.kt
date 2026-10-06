@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.FloatingToolbarDefaults
+import androidx.compose.material3.FloatingToolbarExitDirection
+import androidx.compose.material3.FloatingToolbarScrollBehavior
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -29,6 +31,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -81,7 +84,9 @@ fun TsugiRoot(requestedStop: String? = null, onRequestHandled: () -> Unit = {}, 
             } else if (placeId != null) {
                 PlaceScreen(vm, placeId, onBack = { openPlace = null }, onOpenStop = { openStop = it })
             } else {
-                Box(Modifier.fillMaxSize()) {
+                // The toolbar slides away while scrolling down and comes back on scroll up.
+                val toolbarScroll = FloatingToolbarDefaults.exitAlwaysScrollBehavior(FloatingToolbarExitDirection.Bottom)
+                Box(Modifier.fillMaxSize().nestedScroll(toolbarScroll)) {
                     val open: (String) -> Unit = { openStop = it }
                     when (tab) {
                         Tab.Saved -> FavouritesScreen(vm, open, onOpenPlace = { openPlace = it })
@@ -92,6 +97,7 @@ fun TsugiRoot(requestedStop: String? = null, onRequestHandled: () -> Unit = {}, 
                         })
                     }
                     MainToolbar(
+                        scrollBehavior = toolbarScroll,
                         current = tab,
                         onSelect = { tab = it },
                         onLocate = {
@@ -117,10 +123,17 @@ fun TsugiRoot(requestedStop: String? = null, onRequestHandled: () -> Unit = {}, 
 }
 
 @Composable
-private fun MainToolbar(current: Tab, onSelect: (Tab) -> Unit, onLocate: () -> Unit, modifier: Modifier = Modifier) {
+private fun MainToolbar(
+    scrollBehavior: FloatingToolbarScrollBehavior,
+    current: Tab,
+    onSelect: (Tab) -> Unit,
+    onLocate: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     HorizontalFloatingToolbar(
         expanded = true,
         modifier = modifier,
+        scrollBehavior = scrollBehavior,
         floatingActionButton = {
             FloatingToolbarDefaults.StandardFloatingActionButton(onClick = onLocate) {
                 Icon(painterResource(R.drawable.ic_my_location), contentDescription = "Find stops near me")

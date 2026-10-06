@@ -155,7 +155,7 @@ fun StopScreen(vm: AppViewModel, code: String, onBack: () -> Unit) {
                     else -> items(data.services, key = { it.serviceNo }) { service ->
                         val fav = Favourite.Service(code, service.serviceNo)
                         ServiceCard(
-                            vm, service, now,
+                            Modifier.animateItem(), vm, service, now,
                             pinned = fav in favourites,
                             onTogglePin = {
                                 haptic(fav !in favourites)
@@ -193,6 +193,7 @@ private fun RefreshProgress(fetchedAt: Instant?, now: Instant) {
 
 @Composable
 private fun ServiceCard(
+    modifier: Modifier,
     vm: AppViewModel,
     service: ServiceArrivals,
     now: Instant,
@@ -203,7 +204,7 @@ private fun ServiceCard(
 ) {
     val colors = MaterialTheme.colorScheme
     val running = service.buses.isNotEmpty()
-    Surface(shape = RoundedCornerShape(24.dp), color = colors.surfaceContainer) {
+    Surface(modifier = modifier, shape = RoundedCornerShape(24.dp), color = colors.surfaceContainer) {
         Column(Modifier.padding(start = 12.dp, end = 8.dp, top = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 ServiceBadge(service.serviceNo, active = running)
