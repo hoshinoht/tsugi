@@ -13,6 +13,7 @@ import dev.cantabile.tsugi.data.TrainStatus
 import dev.cantabile.tsugi.data.placeNameFrom
 import dev.cantabile.tsugi.data.serviceOrder
 import dev.cantabile.tsugi.data.toDomain
+import dev.cantabile.tsugi.widget.refreshFavouritesWidget
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -71,6 +73,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         loadStops()
+        // Keep the home-screen widget in step with favourites (skips the initial load).
+        viewModelScope.launch {
+            c.favourites.favourites.drop(1).collect { runCatching { refreshFavouritesWidget(app) } }
+        }
     }
 
     fun loadStops() {

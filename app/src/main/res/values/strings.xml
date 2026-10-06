@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Tsugi</string>
+    <string name="widget_name">Tsugi favourites</string>
+    <string name="widget_description">Next buses for your saved stops</string>
 </resources>

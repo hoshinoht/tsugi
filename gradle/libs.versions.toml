@@ -10,6 +10,7 @@ okhttp = "5.5.0"
 serialization = "1.11.0"
 coroutines = "1.11.0"
 junit = "4.13.2"
+glance = "1.2.0"
 
 [libraries]
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
@@ -24,6 +25,8 @@ datastore-preferences = { group = "androidx.datastore", name = "datastore-prefer
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", version.ref = "glance" }
+glance-material3 = { group = "androidx.glance", name = "glance-material3", version.ref = "glance" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]
