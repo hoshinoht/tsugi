@@ -10,6 +10,7 @@ import android.graphics.drawable.Icon
 import android.os.Build
 import dev.cantabile.tsugi.MainActivity
 import dev.cantabile.tsugi.R
+import dev.cantabile.tsugi.data.stopsAwayLabel
 
 /** What the ongoing notification shows on each poll. */
 data class LiveState(
@@ -20,6 +21,7 @@ data class LiveState(
     val stopName: String,
     val loadLabel: String,
     val nextMinutes: Long?,
+    val stopsAway: Int? = null,
 )
 
 object TrackingNotifications {
@@ -56,6 +58,7 @@ object TrackingNotifications {
             "at ${state?.stopName ?: target.stopCode}",
         ).joinToString(" · ")
         val sub = listOfNotNull(
+            state?.stopsAway?.let(::stopsAwayLabel),
             state?.loadLabel?.ifEmpty { null },
             state?.nextMinutes?.let { "next in $it min" },
         ).joinToString(" · ").ifEmpty { null }

@@ -10,7 +10,10 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import dev.cantabile.tsugi.data.AddressHit
 import dev.cantabile.tsugi.data.MapPin
+import dev.cantabile.tsugi.data.Bus
 import dev.cantabile.tsugi.data.BusStop
+import dev.cantabile.tsugi.data.distanceM
+import dev.cantabile.tsugi.data.stopsAway
 import dev.cantabile.tsugi.data.Favourite
 import dev.cantabile.tsugi.data.NearbyStop
 import dev.cantabile.tsugi.data.ServiceArrivals
@@ -216,6 +219,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Adds timetable details from the cached route and service data; see [withTimetable]. */
     private fun withScheduled(code: String, live: List<ServiceArrivals>): List<ServiceArrivals> =
         withTimetable(live, c.routes.index.value?.byStop?.get(code).orEmpty(), c.serviceInfo.index.value, ZonedDateTime.now(SINGAPORE))
+
+    /** How many stops away [bus] is from [stopCode], from its reported position; null if unknown. */
+    fun stopsAway(stopCode: String, serviceNo: String, bus: Bus): Int? =
+        c.routes.index.value?.stopsAway(stopCode, serviceNo, bus) { code -> c.stops[code]?.let { it.lat to it.lng } }
+
+    /** Metres from your last known position to [stopCode], for leave-now alerts; null if unknown. */
+    fun walkMetres(stopCode: String): Int? {
+        val here = _here.value ?: return null
+        val stop = c.stops[stopCode] ?: return null
+        return distanceM(here.latitude, here.longitude, stop.lat, stop.lng)
+    }
 
     private fun fillScheduled() {
         _arrivals.update { all -> all.mapValues { (code, a) -> a.copy(services = withScheduled(code, a.services)) } }

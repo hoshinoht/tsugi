@@ -28,6 +28,8 @@ data class NextBusDto(
     @SerialName("EstimatedArrival") val estimatedArrival: String = "",
     @SerialName("Monitored") val monitored: Int = 0,
     @SerialName("VisitNumber") val visitNumber: String = "",
+    @SerialName("Latitude") val latitude: String = "",
+    @SerialName("Longitude") val longitude: String = "",
     @SerialName("Load") val load: String = "",
     @SerialName("Feature") val feature: String = "",
     @SerialName("Type") val type: String = "",
@@ -78,6 +80,11 @@ data class Bus(
     val type: BusType,
     val wheelchair: Boolean,
     val destinationCode: String,
+    /** The bus's last reported position; null for scheduled times. */
+    val lat: Double? = null,
+    val lng: Double? = null,
+    /** 2 on a loop service's second pass of the stop. */
+    val visit: Int = 1,
 )
 
 data class ServiceArrivals(
@@ -139,6 +146,9 @@ private fun NextBusDto.toBus(): Bus? {
         },
         wheelchair = feature == "WAB",
         destinationCode = destinationCode,
+        lat = latitude.toDoubleOrNull()?.takeIf { it != 0.0 },
+        lng = longitude.toDoubleOrNull()?.takeIf { it != 0.0 },
+        visit = visitNumber.toIntOrNull() ?: 1,
     )
 }
 

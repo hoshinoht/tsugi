@@ -47,6 +47,7 @@ import dev.cantabile.tsugi.data.allStopCodes
 import dev.cantabile.tsugi.tracking.Tracked
 import dev.cantabile.tsugi.data.ServiceArrivals
 import dev.cantabile.tsugi.data.StopSort
+import dev.cantabile.tsugi.data.stopsAwayLabel
 import java.time.Duration
 import java.time.Instant
 
@@ -63,7 +64,7 @@ fun StopScreen(vm: AppViewModel, code: String, onBack: () -> Unit, onOpenStop: (
     val data = arrivals[code]
     val haptic = rememberToggleHaptic()
     val sort by vm.stopSort.collectAsStateWithLifecycle()
-    val tracking = rememberTrackingControl()
+    val tracking = rememberTrackingControl(walkMetres = vm::walkMetres)
     val toggleTracking: (String) -> Unit = { service -> tracking.toggle(code, service) }
     var showSave by rememberSaveable { mutableStateOf(false) }
     // Filled star if this stop is saved in any form: whole stop, a pinned bus, or part of a place.
@@ -134,7 +135,7 @@ fun StopScreen(vm: AppViewModel, code: String, onBack: () -> Unit, onOpenStop: (
                     else -> items(sortServices(data.services, sort) { Favourite.Service(code, it) in favourites }, key = { it.serviceNo }) { service ->
                         val fav = Favourite.Service(code, service.serviceNo)
                         ServiceCard(
-                            Modifier.animateItem(), vm, service, now,
+                            Modifier.animateItem(), vm, code, service, now,
                             pinned = fav in favourites,
                             onTogglePin = {
                                 haptic(fav !in favourites)
@@ -192,6 +193,7 @@ private fun RefreshProgress(fetchedAt: Instant?, now: Instant) {
 private fun ServiceCard(
     modifier: Modifier,
     vm: AppViewModel,
+    stopCode: String,
     service: ServiceArrivals,
     now: Instant,
     pinned: Boolean,
@@ -213,7 +215,11 @@ private fun ServiceCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        listOfNotNull(service.operator, service.frequency.takeIf { running }).joinToString(" · "),
+                        listOfNotNull(
+                            service.buses.firstOrNull()?.let { vm.stopsAway(stopCode, service.serviceNo, it) }?.let(::stopsAwayLabel),
+                            service.operator,
+                            service.frequency.takeIf { running },
+                        ).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.onSurfaceVariant,
                     )

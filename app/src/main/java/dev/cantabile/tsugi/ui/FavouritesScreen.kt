@@ -57,6 +57,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.cantabile.tsugi.R
+import dev.cantabile.tsugi.data.stopsAwayLabel
 import dev.cantabile.tsugi.data.Favourite
 import dev.cantabile.tsugi.tracking.Tracked
 import dev.cantabile.tsugi.data.NextUp
@@ -117,7 +118,7 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace
     val ordered = cards.sortedBy { c -> order.indexOf(c.id).let { if (it < 0) Int.MAX_VALUE else it } }
     val currentIds by rememberUpdatedState(ordered.map { it.id })
     val haptic = rememberToggleHaptic()
-    val tracking = rememberTrackingControl()
+    val tracking = rememberTrackingControl(walkMetres = vm::walkMetres)
     val listState = rememberLazyListState()
     val reorderState = rememberReorderableLazyListState(listState) { from, to ->
         val ids = (dragOrder ?: currentIds).toMutableList()
@@ -282,9 +283,14 @@ private fun HeroCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        "${vm.stop(nextUp.stopCode)?.description ?: ""} · ${nextUp.stopCode}",
+                        listOfNotNull(
+                            vm.stop(nextUp.stopCode)?.description,
+                            nextUp.stopCode,
+                            vm.stopsAway(nextUp.stopCode, service.serviceNo, next)?.let(::stopsAwayLabel),
+                        ).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                     )
+                    lastBusNotice(service, now)?.let { Text(it, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold) }
                 }
                 CookieCountdown(
                     value = if (minutes < 1) "Arr" else minutes.toString(),

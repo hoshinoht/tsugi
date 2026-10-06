@@ -24,17 +24,19 @@ class TrackingControl(val tracked: Tracked?, val toggle: (stopCode: String, serv
  * permission the first time (Android 13+), then starts tracking once it's granted.
  */
 @Composable
-fun rememberTrackingControl(): TrackingControl {
+fun rememberTrackingControl(walkMetres: (stopCode: String) -> Int? = { null }): TrackingControl {
     val context = LocalContext.current
     val haptic = rememberToggleHaptic()
     val tracked by BusTrackingService.tracked.collectAsStateWithLifecycle()
     // Remember which bus asked, so tracking starts once permission is granted.
     var pending by rememberSaveable { mutableStateOf<List<String>?>(null) }
+    // Measured here, while the app is open: the tracking service doesn't use location itself.
+    fun start(stop: String, service: String) = BusTrackingService.start(context, stop, service, walkMetres(stop))
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         val target = pending
         pending = null
         if (granted && target != null) {
-            BusTrackingService.start(context, target[0], target[1])
+            start(target[0], target[1])
         } else if (!granted) {
             Toast.makeText(context, "Allow notifications to get bus alerts", Toast.LENGTH_LONG).show()
         }
@@ -49,7 +51,7 @@ fun rememberTrackingControl(): TrackingControl {
                 pending = listOf(stop, service)
                 permission.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
-            else -> BusTrackingService.start(context, stop, service)
+            else -> start(stop, service)
         }
     }
 }

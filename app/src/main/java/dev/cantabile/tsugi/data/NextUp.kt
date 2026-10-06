@@ -16,7 +16,7 @@ data class NextUp(
 )
 
 const val NEAR_STOP_M = 400
-private const val WALK_M_PER_MIN = 80
+const val WALK_M_PER_MIN = 80
 private const val DISTANCE_BUCKET_M = 100
 
 /**
