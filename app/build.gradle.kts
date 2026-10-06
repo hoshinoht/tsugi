@@ -80,6 +80,8 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.glance.appwidget)
     implementation(libs.glance.material3)
+    // Glance pulls in WorkManager 2.7.1 (Room 2.2.5), which crashes at startup on Android 17.
+    implementation(libs.work.runtime)
     debugImplementation(libs.compose.ui.tooling)
     testImplementation(libs.junit)
 }
