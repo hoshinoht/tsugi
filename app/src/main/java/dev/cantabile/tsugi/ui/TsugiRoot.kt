@@ -35,6 +35,9 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.offset
@@ -188,10 +191,6 @@ fun TsugiRoot(
                         scrollBehavior = toolbarScroll,
                         current = tab,
                         onSelect = { tab = it },
-                        onLocate = {
-                            tab = Tab.Nearby
-                            requestLocation()
-                        },
                         modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 16.dp),
                     )
                     if (!vm.hasApiKey) {
@@ -215,7 +214,6 @@ private fun MainToolbar(
     scrollBehavior: FloatingToolbarScrollBehavior,
     current: Tab,
     onSelect: (Tab) -> Unit,
-    onLocate: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     HorizontalFloatingToolbar(
@@ -224,11 +222,6 @@ private fun MainToolbar(
         scrollBehavior = scrollBehavior,
         // Vibrant (primary-container) colours so the toolbar stands apart from the cards behind it.
         colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
-        floatingActionButton = {
-            FloatingToolbarDefaults.VibrantFloatingActionButton(onClick = onLocate) {
-                Icon(painterResource(R.drawable.ic_my_location), contentDescription = "Find stops near me")
-            }
-        },
     ) {
         TabSlots(current, onSelect)
     }
@@ -245,7 +238,7 @@ private fun TabSlots(current: Tab, onSelect: (Tab) -> Unit) {
     Box(Modifier.width(TAB_SLOT_WIDTH * Tab.entries.size).height(48.dp)) {
         Box(
             Modifier
-                .offset(x = offset)
+                .offset { IntOffset(offset.roundToPx(), 0) }
                 .width(TAB_SLOT_WIDTH)
                 .fillMaxHeight()
                 .clip(CircleShape)
@@ -280,9 +273,11 @@ private fun TabSlot(tab: Tab, selected: Boolean, onClick: () -> Unit) {
             color = content,
             style = MaterialTheme.typography.labelLarge,
             maxLines = 1,
+            // Shrinks rather than clips at large system font sizes.
+            autoSize = TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = MaterialTheme.typography.labelLarge.fontSize),
             modifier = Modifier.padding(start = 6.dp),
         )
     }
 }
 
-private val TAB_SLOT_WIDTH = 96.dp
+private val TAB_SLOT_WIDTH = 104.dp

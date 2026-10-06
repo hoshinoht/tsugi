@@ -1,11 +1,5 @@
 package dev.cantabile.tsugi.ui
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
-import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,7 +33,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -51,7 +44,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.cantabile.tsugi.R
 import dev.cantabile.tsugi.data.Favourite
 import dev.cantabile.tsugi.data.allStopCodes
-import dev.cantabile.tsugi.tracking.BusTrackingService
 import dev.cantabile.tsugi.tracking.Tracked
 import dev.cantabile.tsugi.data.ServiceArrivals
 import dev.cantabile.tsugi.data.StopSort
@@ -71,32 +63,8 @@ fun StopScreen(vm: AppViewModel, code: String, onBack: () -> Unit, onOpenStop: (
     val data = arrivals[code]
     val haptic = rememberToggleHaptic()
     val sort by vm.stopSort.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    val tracked by BusTrackingService.tracked.collectAsStateWithLifecycle()
-    // Remember which bus asked, so tracking starts once notification permission is granted.
-    var pendingTrack by rememberSaveable { mutableStateOf<String?>(null) }
-    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        val service = pendingTrack
-        pendingTrack = null
-        if (granted && service != null) {
-            BusTrackingService.start(context, code, service)
-        } else if (!granted) {
-            Toast.makeText(context, "Allow notifications to get bus alerts", Toast.LENGTH_LONG).show()
-        }
-    }
-    val toggleTracking: (String) -> Unit = { service ->
-        val on = tracked == Tracked(code, service)
-        haptic(!on)
-        when {
-            on -> BusTrackingService.stop(context)
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED -> {
-                pendingTrack = service
-                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
-            else -> BusTrackingService.start(context, code, service)
-        }
-    }
+    val tracking = rememberTrackingControl()
+    val toggleTracking: (String) -> Unit = { service -> tracking.toggle(code, service) }
     var showSave by rememberSaveable { mutableStateOf(false) }
     // Filled star if this stop is saved in any form: whole stop, a pinned bus, or part of a place.
     val saved = favourites.any { it.allStopCodes.contains(code) }
@@ -172,7 +140,7 @@ fun StopScreen(vm: AppViewModel, code: String, onBack: () -> Unit, onOpenStop: (
                                 haptic(fav !in favourites)
                                 vm.toggleFavourite(fav)
                             },
-                            tracking = tracked == Tracked(code, service.serviceNo),
+                            tracking = tracking.tracked == Tracked(code, service.serviceNo),
                             onToggleTracking = { toggleTracking(service.serviceNo) },
                         )
                     }

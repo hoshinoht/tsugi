@@ -39,6 +39,8 @@ import dev.cantabile.tsugi.R
 import dev.cantabile.tsugi.TsugiApplication
 import dev.cantabile.tsugi.data.Favourite
 import dev.cantabile.tsugi.data.ServiceArrivals
+import dev.cantabile.tsugi.data.firstBusLabel
+import dev.cantabile.tsugi.data.labelMinutes
 import dev.cantabile.tsugi.data.toDomain
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -90,17 +92,28 @@ class FavouritesWidget : GlanceAppWidget() {
                     after = s.buses.getOrNull(1)?.let { label(it.eta) } ?: "",
                 )
             }
+        // Overnight nothing runs: say when the first saved bus starts instead of an empty widget.
+        val firstBus = if (rows.isEmpty() && favourites.isNotEmpty()) {
+            runCatching { c.routes.ensureLoaded() }
+            val routes = c.routes.index.value
+            val pinnedPairs = favourites.filterIsInstance<Favourite.Service>().map { it.stopCode to it.serviceNo }.toSet()
+            val wholeCodes = favourites.filterNot { it is Favourite.Service }.flatMap { if (it is Favourite.Place) it.stopCodes else listOf(it.stopCode) }.toSet()
+            routes?.byStop?.filterKeys { it in codes }?.flatMap { (code, stops) ->
+                stops.filter { (code to it.service) in pinnedPairs || code in wholeCodes }
+                    .mapNotNull { r -> r.firstBusLabel()?.let { label -> labelMinutes(label)?.let { Triple(it, label, r.service) } } }
+            }?.minByOrNull { it.first }?.let { (_, label, service) -> "No buses running · first bus $label ($service)" }
+        } else null
         val updated = DateTimeFormatter.ofPattern("H:mm").withZone(ZoneId.systemDefault()).format(now)
 
         provideContent {
             GlanceTheme {
-                Content(rows, if (failed) "Offline · $updated" else "Updated $updated", empty = favourites.isEmpty())
+                Content(rows, if (failed) "Offline · $updated" else "Updated $updated", empty = favourites.isEmpty(), idleMessage = firstBus)
             }
         }
     }
 
     @Composable
-    private fun Content(rows: List<WidgetRow>, status: String, empty: Boolean) {
+    private fun Content(rows: List<WidgetRow>, status: String, empty: Boolean, idleMessage: String?) {
         val colors = GlanceTheme.colors
         Column(
             GlanceModifier
@@ -123,7 +136,7 @@ class FavouritesWidget : GlanceAppWidget() {
             }
             when {
                 empty -> Text("Save a stop or bus in Tsugi to see it here.", style = TextStyle(color = colors.onSurfaceVariant, fontSize = 13.sp))
-                rows.isEmpty() -> Text("No buses running right now.", style = TextStyle(color = colors.onSurfaceVariant, fontSize = 13.sp))
+                rows.isEmpty() -> Text(idleMessage ?: "No buses running right now.", style = TextStyle(color = colors.onSurfaceVariant, fontSize = 13.sp))
                 else -> rows.forEachIndexed { i, r ->
                     if (i > 0) Spacer(GlanceModifier.height(3.dp))
                     Row(

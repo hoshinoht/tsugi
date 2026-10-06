@@ -30,7 +30,9 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.ListItemShapes
@@ -56,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.cantabile.tsugi.R
 import dev.cantabile.tsugi.data.Favourite
+import dev.cantabile.tsugi.tracking.Tracked
 import dev.cantabile.tsugi.data.NextUp
 import dev.cantabile.tsugi.data.NextUpCandidate
 import dev.cantabile.tsugi.data.labelMinutes
@@ -114,6 +117,7 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace
     val ordered = cards.sortedBy { c -> order.indexOf(c.id).let { if (it < 0) Int.MAX_VALUE else it } }
     val currentIds by rememberUpdatedState(ordered.map { it.id })
     val haptic = rememberToggleHaptic()
+    val tracking = rememberTrackingControl()
     val listState = rememberLazyListState()
     val reorderState = rememberReorderableLazyListState(listState) { from, to ->
         val ids = (dragOrder ?: currentIds).toMutableList()
@@ -181,7 +185,13 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace
 
             if (hero != null) {
                 item(key = "hero") {
-                    HeroCard(vm, hero, now, onClick = { onOpenStop(hero.stopCode) }, modifier = Modifier.animateItem())
+                    HeroCard(
+                        vm, hero, now,
+                        onClick = { onOpenStop(hero.stopCode) },
+                        tracking = tracking.tracked == Tracked(hero.stopCode, hero.service.serviceNo),
+                        onToggleTracking = { tracking.toggle(hero.stopCode, hero.service.serviceNo) },
+                        modifier = Modifier.animateItem(),
+                    )
                 }
             }
 
@@ -236,7 +246,15 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace
 }
 
 @Composable
-private fun HeroCard(vm: AppViewModel, nextUp: NextUp, now: Instant, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun HeroCard(
+    vm: AppViewModel,
+    nextUp: NextUp,
+    now: Instant,
+    onClick: () -> Unit,
+    tracking: Boolean,
+    onToggleTracking: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val colors = MaterialTheme.colorScheme
     val service = nextUp.service
     val next = nextUp.bus
@@ -281,11 +299,26 @@ private fun HeroCard(vm: AppViewModel, nextUp: NextUp, now: Instant, onClick: ()
                 if (later.isNotEmpty()) {
                     Text("then ${later.joinToString(" · ")} min", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                 }
+                FilledIconToggleButton(
+                    checked = tracking,
+                    onCheckedChange = { onToggleTracking() },
+                    colors = IconButtonDefaults.filledIconToggleButtonColors(
+                        containerColor = colors.onPrimaryContainer.copy(alpha = 0.12f),
+                        contentColor = colors.onPrimaryContainer,
+                    ),
+                ) {
+                    Icon(
+                        painterResource(if (tracking) R.drawable.ic_bell_filled else R.drawable.ic_bell),
+                        contentDescription = if (tracking) "Stop alerts for ${service.serviceNo}" else "Alert me when ${service.serviceNo} is near",
+                    )
+                }
             }
         }
     }
 }
 
+// The extra Modifier is the drag handle from the reorderable list, not the layout modifier.
+@Suppress("ModifierParameter")
 @Composable
 private fun WholeStopCard(
     vm: AppViewModel,
@@ -339,6 +372,8 @@ private fun WholeStopCard(
 }
 
 /** Header for a group of pinned buses: tap anywhere on it to collapse or expand. */
+// The extra Modifier is the drag handle from the reorderable list, not the layout modifier.
+@Suppress("ModifierParameter")
 @Composable
 private fun CollapsibleHeader(
     title: String,
@@ -368,6 +403,8 @@ private fun CollapsibleHeader(
 }
 
 /** Grip for drag-to-reorder; [handle] carries the drag gesture from the reorderable list. */
+// The extra Modifier is the drag handle from the reorderable list, not the layout modifier.
+@Suppress("ModifierParameter")
 @Composable
 private fun DragHandle(handleModifier: Modifier) {
     Icon(
@@ -482,6 +519,8 @@ fun ServiceRow(
     }
 }
 
+// The extra Modifier is the drag handle from the reorderable list, not the layout modifier.
+@Suppress("ModifierParameter")
 @Composable
 private fun PlaceCard(place: Favourite.Place, board: List<Pair<String, ServiceArrivals>>, now: Instant, onClick: () -> Unit, handleModifier: Modifier, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
