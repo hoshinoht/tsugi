@@ -65,6 +65,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -160,9 +161,13 @@ fun ServiceBadge(
     }
 }
 
-/** 3/2/1 bars, so crowding reads without relying on colour. */
+/**
+ * Crowding as 3/2/1 bars coloured green, amber or red. The bar count carries the meaning on its
+ * own, so it still reads for colour-blind users. [contentColor] is the text colour on the
+ * surface behind the bars: it picks the light or dark palette and tints the empty bars.
+ */
 @Composable
-fun LoadBars(load: Load, color: Color, modifier: Modifier = Modifier) {
+fun LoadBars(load: Load, contentColor: Color, modifier: Modifier = Modifier) {
     if (load == Load.Unknown) return
     Row(
         modifier = modifier.semantics { contentDescription = load.label },
@@ -174,12 +179,20 @@ fun LoadBars(load: Load, color: Color, modifier: Modifier = Modifier) {
                 Modifier
                     .size(width = 4.dp, height = h.dp)
                     .background(
-                        if (i < load.bars) color else color.copy(alpha = 0.25f),
+                        if (i < load.bars) loadColor(load, onDark = contentColor.luminance() > 0.5f) else contentColor.copy(alpha = 0.25f),
                         RoundedCornerShape(2.dp),
                     ),
             )
         }
     }
+}
+
+/** Fixed (not themed) crowding colours, like MRT line colours; lighter variants for dark surfaces. */
+fun loadColor(load: Load, onDark: Boolean): Color = when (load) {
+    Load.Seats -> if (onDark) Color(0xFF6FD08C) else Color(0xFF1E8E4A)
+    Load.Standing -> if (onDark) Color(0xFFF2C14E) else Color(0xFFB07800)
+    Load.Limited -> if (onDark) Color(0xFFFF8A80) else Color(0xFFC5221F)
+    Load.Unknown -> Color.Unspecified
 }
 
 /**

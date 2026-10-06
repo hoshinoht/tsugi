@@ -17,7 +17,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.FilledIconToggleButton
+import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
@@ -38,6 +40,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -48,6 +53,7 @@ import dev.cantabile.tsugi.data.allStopCodes
 import dev.cantabile.tsugi.tracking.BusTrackingService
 import dev.cantabile.tsugi.tracking.Tracked
 import dev.cantabile.tsugi.data.ServiceArrivals
+import dev.cantabile.tsugi.data.StopSort
 import java.time.Duration
 import java.time.Instant
 
@@ -62,6 +68,7 @@ fun StopScreen(vm: AppViewModel, code: String, onBack: () -> Unit) {
     val stop = vm.stop(code)
     val data = arrivals[code]
     val haptic = rememberToggleHaptic()
+    val sort by vm.stopSort.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val tracked by BusTrackingService.tracked.collectAsStateWithLifecycle()
     // Remember which bus asked, so tracking starts once notification permission is granted.
@@ -139,6 +146,7 @@ fun StopScreen(vm: AppViewModel, code: String, onBack: () -> Unit) {
                             color = colors.onSurfaceVariant,
                         )
                         RefreshProgress(data?.fetchedAt, now)
+                        SortToggle(sort, onSort = vm::setStopSort)
                     }
                 }
 
@@ -152,7 +160,7 @@ fun StopScreen(vm: AppViewModel, code: String, onBack: () -> Unit) {
                     data.services.isEmpty() -> item {
                         MessageCard("No buses are running at this stop right now.")
                     }
-                    else -> items(data.services, key = { it.serviceNo }) { service ->
+                    else -> items(sortServices(data.services, sort) { Favourite.Service(code, it) in favourites }, key = { it.serviceNo }) { service ->
                         val fav = Favourite.Service(code, service.serviceNo)
                         ServiceCard(
                             Modifier.animateItem(), vm, service, now,
@@ -167,6 +175,40 @@ fun StopScreen(vm: AppViewModel, code: String, onBack: () -> Unit) {
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Number keeps LTA's order. Soonest and Starred put services that aren't running at the bottom;
+ * Starred also lifts your pinned buses to the top.
+ */
+private fun sortServices(services: List<ServiceArrivals>, sort: StopSort, pinned: (String) -> Boolean): List<ServiceArrivals> {
+    val eta = compareBy<ServiceArrivals> { it.buses.isEmpty() }.thenBy { it.buses.firstOrNull()?.eta }
+    return when (sort) {
+        StopSort.Number -> services
+        StopSort.Soonest -> services.sortedWith(eta)
+        StopSort.Starred -> services.sortedWith(compareBy<ServiceArrivals> { !pinned(it.serviceNo) }.then(eta))
+    }
+}
+
+@Composable
+private fun SortToggle(sort: StopSort, onSort: (StopSort) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+    ) {
+        StopSort.entries.forEachIndexed { i, option ->
+            ToggleButton(
+                checked = option == sort,
+                onCheckedChange = { onSort(option) },
+                modifier = Modifier.weight(1f).semantics { role = Role.RadioButton },
+                shapes = when (i) {
+                    0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                    StopSort.entries.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                    else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                },
+            ) { Text(option.label) }
         }
     }
 }

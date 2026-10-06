@@ -183,7 +183,8 @@ fun MiniTile(service: ServiceArrivals, now: Instant, modifier: Modifier = Modifi
     Column(
         modifier
             .clearAndSetSemantics {
-                contentDescription = "Bus ${service.serviceNo}, " + (first?.let { spokenEta(it, now) } ?: "not running")
+                contentDescription = "Bus ${service.serviceNo}, " +
+                    (first?.let { spokenEta(it, now) } ?: service.firstBus?.let { "not running, first bus $it" } ?: "not running")
             }
             .clip(RoundedCornerShape(12.dp))
             .background(if (arriving) colors.primary else colors.surface)
@@ -192,7 +193,9 @@ fun MiniTile(service: ServiceArrivals, now: Instant, modifier: Modifier = Modifi
     ) {
         Text(service.serviceNo, color = fg, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Clip)
         RollingText(
-            first?.let { if (arriving) "Arr" else "${minutesUntil(it.eta, now)}m" } ?: "—",
+            first?.let { if (arriving) "Arr" else "${minutesUntil(it.eta, now)}m" }
+                ?: service.firstBus?.substringBefore(' ')
+                ?: "—",
             color = fg,
             style = MaterialTheme.typography.labelMedium,
         )

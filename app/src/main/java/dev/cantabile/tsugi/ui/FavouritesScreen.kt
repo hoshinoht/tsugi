@@ -1,5 +1,11 @@
 package dev.cantabile.tsugi.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +23,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.ListItemShapes
 import androidx.compose.material3.SegmentedListItem
@@ -25,10 +32,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,6 +55,9 @@ import java.time.Instant
 fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace: (String) -> Unit) {
     val favourites by vm.favourites.collectAsStateWithLifecycle()
     val loaded by vm.favouritesLoaded.collectAsStateWithLifecycle()
+    // Cards start expanded on every launch; collapsing lasts for the session (and rotation).
+    var collapsed by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    val setCollapsed = { id: String, collapse: Boolean -> collapsed = if (collapse) collapsed + id else collapsed - id }
     val arrivals by vm.arrivals.collectAsStateWithLifecycle()
     vm.stops.collectAsStateWithLifecycle() // recompose once stop names are available
     val codes = remember(favourites) { favourites.flatMap { it.allStopCodes }.distinct() }
@@ -94,22 +108,36 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace
             }
 
             items(wholeStops, key = { "stop-${it.stopCode}" }) { fav ->
-                WholeStopCard(vm, fav.stopCode, arrivals[fav.stopCode]?.services.orEmpty(), now, onClick = { onOpenStop(fav.stopCode) }, modifier = Modifier.animateItem())
+                val id = "stop:${fav.stopCode}"
+                WholeStopCard(
+                    vm, fav.stopCode, arrivals[fav.stopCode]?.services.orEmpty(), now,
+                    expanded = id !in collapsed,
+                    onToggle = { setCollapsed(id, it) },
+                    onClick = { onOpenStop(fav.stopCode) },
+                    modifier = Modifier.animateItem(),
+                )
             }
 
             groups.forEach { (code, favs) ->
                 item(key = "group-$code") {
-                    Column(Modifier.animateItem(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        val stop = vm.stop(code)
-                        Text(
-                            stop?.description ?: code,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(start = 8.dp, top = 4.dp),
+                    val id = "group:$code"
+                    val expanded = id !in collapsed
+                    Column(Modifier.animateItem()) {
+                        val soonest = favs.mapNotNull { f -> service(f)?.buses?.firstOrNull()?.let { f.serviceNo to it } }.minByOrNull { it.second.eta }
+                        CollapsibleHeader(
+                            title = vm.stop(code)?.description ?: code,
+                            summary = listOfNotNull(
+                                "${favs.size} bus${if (favs.size == 1) "" else "es"}",
+                                soonest?.let { (no, bus) -> "$no ${etaLabel(bus, now).let { if (it == "Arr") "arriving" else "in $it min" }}" },
+                            ).joinToString(" · "),
+                            expanded = expanded,
+                            onToggle = { setCollapsed(id, expanded) },
                         )
-                        Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
-                            favs.forEachIndexed { i, f ->
-                                ServiceRow(vm, f.serviceNo, service(f), now, ListItemDefaults.segmentedShapes(i, favs.size), onClick = { onOpenStop(code) })
+                        CollapsibleBody(expanded) {
+                            Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+                                favs.forEachIndexed { i, f ->
+                                    ServiceRow(vm, f.serviceNo, service(f), now, ListItemDefaults.segmentedShapes(i, favs.size), onClick = { onOpenStop(code) })
+                                }
                             }
                         }
                     }
@@ -166,29 +194,97 @@ private fun HeroCard(vm: AppViewModel, fav: Favourite.Service, service: ServiceA
 }
 
 @Composable
-private fun WholeStopCard(vm: AppViewModel, code: String, services: List<ServiceArrivals>, now: Instant, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun WholeStopCard(
+    vm: AppViewModel,
+    code: String,
+    services: List<ServiceArrivals>,
+    now: Instant,
+    expanded: Boolean,
+    onToggle: (collapse: Boolean) -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val colors = MaterialTheme.colorScheme
+    val running = services.filter { it.buses.isNotEmpty() }
+    val soonest = running.minByOrNull { it.buses.first().eta }
     Surface(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(28.dp), color = colors.surfaceContainerHigh) {
-        Column(Modifier.padding(start = 18.dp, end = 14.dp, top = 14.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Column {
-                Text(vm.stop(code)?.description ?: code, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(
-                    "Whole stop · $code · ${services.size} services",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.onSurfaceVariant,
-                )
+        Column(Modifier.padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f).padding(top = 8.dp)) {
+                    Text(vm.stop(code)?.description ?: code, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (expanded) {
+                            "Whole stop · $code · ${services.size} services"
+                        } else {
+                            listOfNotNull(
+                                "${running.size} of ${services.size} running",
+                                soonest?.let { s -> "${s.serviceNo} ${etaLabel(s.buses.first(), now).let { if (it == "Arr") "arriving" else "in $it min" }}" },
+                            ).joinToString(" · ")
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant,
+                    )
+                }
+                ExpandChevron(expanded, onToggle = { onToggle(expanded) })
             }
-            services.chunked(5).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    row.forEach { s -> MiniTile(s, now, Modifier.weight(1f)) }
-                    repeat(5 - row.size) { Box(Modifier.weight(1f)) }
+            CollapsibleBody(expanded) {
+                Column(Modifier.padding(top = 10.dp, end = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // Running services first (soonest first), then idle ones with their first-bus times.
+                    val ordered = running.sortedBy { it.buses.first().eta } + services.filter { it.buses.isEmpty() }
+                    ordered.chunked(5).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            row.forEach { s -> MiniTile(s, now, Modifier.weight(1f)) }
+                            repeat(5 - row.size) { Box(Modifier.weight(1f)) }
+                        }
+                    }
                 }
             }
         }
     }
 }
 
-/** One bus at one stop as an M3E segmented list row; times roll as they change. */
+/** Header for a group of pinned buses: tap anywhere on it to collapse or expand. */
+@Composable
+private fun CollapsibleHeader(title: String, summary: String, expanded: Boolean, onToggle: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClickLabel = if (expanded) "Collapse" else "Expand", onClick = onToggle)
+            .padding(start = 8.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            AnimatedVisibility(!expanded) {
+                Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        ExpandChevron(expanded, onToggle)
+    }
+}
+
+@Composable
+private fun ExpandChevron(expanded: Boolean, onToggle: () -> Unit) {
+    val rotation by animateFloatAsState(if (expanded) 180f else 0f, MaterialTheme.motionScheme.defaultSpatialSpec(), label = "chevron")
+    IconButton(onClick = onToggle) {
+        Icon(
+            painterResource(R.drawable.ic_chevron_down),
+            contentDescription = if (expanded) "Collapse" else "Expand",
+            modifier = Modifier.rotate(rotation),
+        )
+    }
+}
+
+@Composable
+private fun CollapsibleBody(expanded: Boolean, content: @Composable () -> Unit) {
+    AnimatedVisibility(
+        visible = expanded,
+        enter = expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) + fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+        exit = shrinkVertically(MaterialTheme.motionScheme.fastSpatialSpec()) + fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
+    ) { content() }
+}
+
 @Composable
 fun ServiceRow(
     vm: AppViewModel,

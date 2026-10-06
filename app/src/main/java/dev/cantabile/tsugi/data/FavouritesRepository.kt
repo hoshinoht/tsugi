@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -32,6 +33,8 @@ sealed interface Favourite {
     }
 }
 
+enum class StopSort(val label: String) { Soonest("Soonest"), Number("Number"), Starred("Starred") }
+
 /** "Opp Bugis Stn Exit C" → "Bugis Stn": drops position prefixes and exit suffixes. */
 fun placeNameFrom(stopDescription: String): String = stopDescription
     .replace(Regex("^(Opp|Aft|Bef)\\s+", RegexOption.IGNORE_CASE), "")
@@ -48,7 +51,19 @@ class FavouritesRepository(
 ) {
     private val key = stringPreferencesKey("favourites")
 
-    val favourites: Flow<List<Favourite>> = store.data.map { prefs -> decode(prefs[key]) }
+    val favourites: Flow<List<Favourite>> = store.data.map { prefs -> decode(prefs[key]) }.distinctUntilChanged()
+
+    private val stopSortKey = stringPreferencesKey("stop_sort")
+
+    /** How the stop screen orders services; remembered across stops and restarts. */
+    val stopSort: Flow<StopSort> = store.data
+        .map { prefs -> StopSort.entries.firstOrNull { it.name == prefs[stopSortKey] } ?: StopSort.Soonest }
+        .distinctUntilChanged()
+
+    suspend fun setStopSort(sort: StopSort) {
+        store.edit { it[stopSortKey] = sort.name }
+    }
+
 
     suspend fun toggle(favourite: Favourite) = update { if (favourite in it) it - favourite else it + favourite }
 

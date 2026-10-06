@@ -11,6 +11,7 @@ import dev.cantabile.tsugi.data.Favourite
 import dev.cantabile.tsugi.data.NearbyStop
 import dev.cantabile.tsugi.data.ServiceArrivals
 import dev.cantabile.tsugi.data.StopArrivals
+import dev.cantabile.tsugi.data.StopSort
 import dev.cantabile.tsugi.data.firstBusLabel
 import dev.cantabile.tsugi.data.operatorName
 import dev.cantabile.tsugi.data.TrainStatus
@@ -55,6 +56,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val stops: StateFlow<List<BusStop>> = c.stops.stops
     val favourites: StateFlow<List<Favourite>> =
         c.favourites.favourites.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val stopSort: StateFlow<StopSort> =
+        c.favourites.stopSort.stateIn(viewModelScope, SharingStarted.Eagerly, StopSort.Soonest)
+
+    fun setStopSort(sort: StopSort) {
+        viewModelScope.launch { c.favourites.setStopSort(sort) }
+    }
 
     /** False until favourites have been read from disk, so screens don't mistake "loading" for "empty". */
     val favouritesLoaded: StateFlow<Boolean> =
