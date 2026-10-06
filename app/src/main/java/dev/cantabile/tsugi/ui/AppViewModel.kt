@@ -21,7 +21,9 @@ import dev.cantabile.tsugi.data.StationIndex
 import dev.cantabile.tsugi.data.byStation
 import dev.cantabile.tsugi.data.crowdLineOf
 import dev.cantabile.tsugi.data.forecastByStation
+import dev.cantabile.tsugi.data.BusOnRoute
 import dev.cantabile.tsugi.data.BusStop
+import dev.cantabile.tsugi.data.locate
 import dev.cantabile.tsugi.data.distanceM
 import dev.cantabile.tsugi.data.stopsAway
 import dev.cantabile.tsugi.data.Favourite
@@ -266,6 +268,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** How many stops away [bus] is from [stopCode], from its reported position; null if unknown. */
     fun stopsAway(stopCode: String, serviceNo: String, bus: Bus): Int? =
         c.routes.index.value?.stopsAway(stopCode, serviceNo, bus) { code -> c.stops[code]?.let { it.lat to it.lng } }
+
+    /** Where [bus] is on [serviceNo]'s route towards [stopCode], for the route screen; null if unknown. */
+    fun locateBus(stopCode: String, serviceNo: String, bus: Bus): BusOnRoute? =
+        c.routes.index.value?.locate(stopCode, serviceNo, bus) { code -> c.stops[code]?.let { it.lat to it.lng } }
 
     /** Metres from your last known position to [stopCode], for leave-now alerts; null if unknown. */
     fun walkMetres(stopCode: String): Int? {

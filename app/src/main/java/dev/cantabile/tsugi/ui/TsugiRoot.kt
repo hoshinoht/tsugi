@@ -74,7 +74,8 @@ import dev.cantabile.tsugi.R
 private object Layer {
     const val SETTINGS = "settings"
     fun stop(code: String) = "stop:$code"
-    fun service(no: String) = "service:$no"
+    /** [from] is the stop it was opened from, so the route can show buses heading there. */
+    fun service(no: String, from: String? = null) = "service:$no" + (from?.let { "@$it" } ?: "")
     fun place(id: String) = "place:$id"
     fun station(code: String) = "station:$code"
 }
@@ -157,8 +158,8 @@ fun TsugiRoot(
         Box(peek) {
             when (layer.substringBefore(':')) {
                 "settings" -> SettingsScreen(vm, onBack = pop)
-                "stop" -> StopScreen(vm, arg, onBack = pop, onOpenStop = openStop, onOpenStation = openStation, onOpenService = { push(Layer.service(it)) })
-                "service" -> ServiceScreen(vm, arg, onBack = pop, onOpenStop = openStop)
+                "stop" -> StopScreen(vm, arg, onBack = pop, onOpenStop = openStop, onOpenStation = openStation, onOpenService = { push(Layer.service(it, from = arg)) })
+                "service" -> ServiceScreen(vm, arg.substringBefore('@'), onBack = pop, onOpenStop = openStop, fromStop = arg.substringAfter('@', "").ifEmpty { null })
                 "place" -> PlaceScreen(vm, arg, onBack = pop, onOpenStop = openStop)
                 "station" -> StationScreen(vm, arg, onBack = pop, onOpenStop = openStop)
             }
