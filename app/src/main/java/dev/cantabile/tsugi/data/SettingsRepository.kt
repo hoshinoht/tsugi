@@ -29,6 +29,13 @@ class SettingsRepository(private val context: Context, private val store: DataSt
     private val stopSortKey = stringPreferencesKey("stop_sort")
     private val alertKey = intPreferencesKey("alert_minutes")
     private val recentKey = stringPreferencesKey("recent_stops")
+    private val cardOrderKey = stringPreferencesKey("card_order")
+
+    /** The user's order for Favourites cards, as card ids ("place:…", "stop:…", "group:…"). */
+    val cardOrder: Flow<List<String>> =
+        store.data.map { it[cardOrderKey]?.split(',')?.filter(String::isNotBlank).orEmpty() }.distinctUntilChanged()
+
+    suspend fun setCardOrder(ids: List<String>) = store.edit { it[cardOrderKey] = ids.joinToString(",") }
 
     val theme: Flow<ThemeMode> = enumPref(themeKey, ThemeMode.System)
     val nearbyRadius: Flow<Int> = store.data.map { it[radiusKey] ?: 200 }.distinctUntilChanged()

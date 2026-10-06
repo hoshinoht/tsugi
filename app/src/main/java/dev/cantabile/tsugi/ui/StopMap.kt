@@ -2,7 +2,7 @@ package dev.cantabile.tsugi.ui
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
-import android.net.Uri
+import androidx.core.net.toUri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -74,7 +74,7 @@ fun StopMap(vm: AppViewModel, stop: BusStop, onOpenStop: (String) -> Unit, modif
                 .clip(RoundedCornerShape(24.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                 .clickable(onClickLabel = "Walking directions") {
-                    val uri = Uri.parse("https://www.google.com/maps/dir/?api=1&destination=${stop.lat},${stop.lng}&travelmode=walking")
+                    val uri = "https://www.google.com/maps/dir/?api=1&destination=${stop.lat},${stop.lng}&travelmode=walking".toUri()
                     try {
                         context.startActivity(Intent(Intent.ACTION_VIEW, uri))
                     } catch (_: ActivityNotFoundException) {

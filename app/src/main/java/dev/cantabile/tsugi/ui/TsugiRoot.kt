@@ -2,6 +2,11 @@ package dev.cantabile.tsugi.ui
 
 import android.Manifest
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -49,18 +54,30 @@ enum class Tab(val label: String, val icon: Int, val iconSelected: Int) {
 
 /** Tab + optional stop overlay. Three screens don't need a navigation library. */
 @Composable
-fun TsugiRoot(requestedStop: String? = null, onRequestHandled: () -> Unit = {}, vm: AppViewModel = viewModel()) {
+fun TsugiRoot(
+    requestedStop: String? = null,
+    requestedTab: String? = null,
+    onRequestHandled: () -> Unit = {},
+    vm: AppViewModel = viewModel(),
+) {
     var tab by rememberSaveable { mutableStateOf(Tab.Saved) }
     var openStop by rememberSaveable { mutableStateOf<String?>(null) }
-    LaunchedEffect(requestedStop) {
-        if (requestedStop != null) {
-            openStop = requestedStop
-            onRequestHandled()
-        }
-    }
     var openPlace by rememberSaveable { mutableStateOf<String?>(null) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var openService by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(requestedStop, requestedTab) {
+        if (requestedStop != null || requestedTab != null) {
+            requestedStop?.let { openStop = it }
+            Tab.entries.firstOrNull { it.name == requestedTab }?.let {
+                tab = it
+                openStop = null
+                openPlace = null
+                openService = null
+                settingsOpen = false
+            }
+            onRequestHandled()
+        }
+    }
     // Keeps each tab's remembered state (scroll position, collapsed cards) while it's off screen.
     val tabStates = rememberSaveableStateHolder()
 
@@ -75,11 +92,33 @@ fun TsugiRoot(requestedStop: String? = null, onRequestHandled: () -> Unit = {}, 
         }
     }
 
-    BackHandler(enabled = settingsOpen) { settingsOpen = false }
-    BackHandler(enabled = openService != null && openStop == null) { openService = null }
-    BackHandler(enabled = openPlace != null && openStop == null && openService == null) { openPlace = null }
-    BackHandler(enabled = openStop != null) { openStop = null }
-    BackHandler(enabled = openStop == null && openPlace == null && openService == null && tab != Tab.Saved) { tab = Tab.Saved }
+    // Predictive back for the full-screen layers: the top one shrinks as you swipe, then closes.
+    // Order: settings, then stop, then service, then place.
+    val overlayOpen = settingsOpen || openStop != null || openService != null || openPlace != null
+    var backProgress by remember { mutableFloatStateOf(0f) }
+    PredictiveBackHandler(enabled = overlayOpen) { events ->
+        try {
+            events.collect { backProgress = it.progress }
+            when {
+                settingsOpen -> settingsOpen = false
+                openStop != null -> openStop = null
+                openService != null -> openService = null
+                else -> openPlace = null
+            }
+        } finally {
+            backProgress = 0f
+        }
+    }
+    BackHandler(enabled = !overlayOpen && tab != Tab.Saved) { tab = Tab.Saved }
+    val reducedMotion = rememberReducedMotion()
+    val peek = Modifier.graphicsLayer {
+        val p = if (reducedMotion) 0f else backProgress
+        scaleX = 1f - 0.08f * p
+        scaleY = 1f - 0.08f * p
+        translationX = 24.dp.toPx() * p
+        shape = RoundedCornerShape(32.dp * p)
+        clip = p > 0f
+    }
 
     val enterSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     val exitSpec = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
@@ -90,13 +129,13 @@ fun TsugiRoot(requestedStop: String? = null, onRequestHandled: () -> Unit = {}, 
             label = "stop",
         ) { (stopCode, placeId, serviceNo, settings) ->
             if (settings) {
-                SettingsScreen(vm, onBack = { settingsOpen = false })
+                Box(peek) { SettingsScreen(vm, onBack = { settingsOpen = false }) }
             } else if (stopCode != null) {
-                StopScreen(vm, stopCode, onBack = { openStop = null }, onOpenStop = { openStop = it })
+                Box(peek) { StopScreen(vm, stopCode, onBack = { openStop = null }, onOpenStop = { openStop = it }) }
             } else if (serviceNo != null) {
-                ServiceScreen(vm, serviceNo, onBack = { openService = null }, onOpenStop = { openStop = it })
+                Box(peek) { ServiceScreen(vm, serviceNo, onBack = { openService = null }, onOpenStop = { openStop = it }) }
             } else if (placeId != null) {
-                PlaceScreen(vm, placeId, onBack = { openPlace = null }, onOpenStop = { openStop = it })
+                Box(peek) { PlaceScreen(vm, placeId, onBack = { openPlace = null }, onOpenStop = { openStop = it }) }
             } else {
                 // The toolbar slides away while scrolling down and comes back on scroll up.
                 val toolbarScroll = FloatingToolbarDefaults.exitAlwaysScrollBehavior(FloatingToolbarExitDirection.Bottom)

@@ -82,6 +82,7 @@ dependencies {
     implementation(libs.glance.material3)
     // Glance pulls in WorkManager 2.7.1 (Room 2.2.5), which crashes at startup on Android 17.
     implementation(libs.work.runtime)
+    implementation(libs.reorderable)
     debugImplementation(libs.compose.ui.tooling)
     testImplementation(libs.junit)
 }

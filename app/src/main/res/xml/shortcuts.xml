@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="nearby"
+        android:icon="@mipmap/ic_shortcut_nearby"
+        android:shortcutShortLabel="@string/shortcut_nearby">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="dev.cantabile.tsugi.MainActivity"
+            android:targetPackage="dev.cantabile.tsugi">
+            <extra android:name="open_tab" android:value="Nearby" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="search"
+        android:icon="@mipmap/ic_shortcut_search"
+        android:shortcutShortLabel="@string/shortcut_search">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="dev.cantabile.tsugi.MainActivity"
+            android:targetPackage="dev.cantabile.tsugi">
+            <extra android:name="open_tab" android:value="Search" />
+        </intent>
+    </shortcut>
+</shortcuts>

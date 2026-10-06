@@ -112,7 +112,8 @@ fun NearbyScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onRequestLocati
                             isOpen = nearby.stop.code == open,
                             services = arrivals[nearby.stop.code]?.services,
                             now = now,
-                            onToggle = { expanded = if (nearby.stop.code == open) "" else nearby.stop.code },
+                            // Tap a collapsed stop to expand it; tap the expanded one to open it.
+                            onToggle = { if (nearby.stop.code == open) onOpenStop(nearby.stop.code) else expanded = nearby.stop.code },
                             onOpen = { onOpenStop(nearby.stop.code) },
                         )
                     }

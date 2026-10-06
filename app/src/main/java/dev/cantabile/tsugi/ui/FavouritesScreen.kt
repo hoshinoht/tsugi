@@ -7,6 +7,14 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.draw.shadow
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -92,6 +100,30 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace
     )
     // Don't repeat the hero's bus in its stop's pinned group.
     val groups = pinned.filterNot { hero != null && it.stopCode == hero.stopCode && it.serviceNo == hero.service.serviceNo }.groupBy { it.stopCode }
+    // Cards in the user's saved order; new cards go after, in the default order.
+    val savedOrder by vm.cardOrder.collectAsStateWithLifecycle()
+    var dragOrder by remember { mutableStateOf<List<String>?>(null) }
+    LaunchedEffect(savedOrder) { if (dragOrder == savedOrder) dragOrder = null }
+    val cards = buildList {
+        places.forEach { add(HomeCard.PlaceCard(it)) }
+        wholeStops.forEach { add(HomeCard.StopCard(it.stopCode)) }
+        groups.forEach { (code, favs) -> add(HomeCard.GroupCard(code, favs)) }
+    }
+    val order = dragOrder ?: savedOrder
+    val ordered = cards.sortedBy { c -> order.indexOf(c.id).let { if (it < 0) Int.MAX_VALUE else it } }
+    val currentIds by rememberUpdatedState(ordered.map { it.id })
+    val haptic = rememberToggleHaptic()
+    val listState = rememberLazyListState()
+    val reorderState = rememberReorderableLazyListState(listState) { from, to ->
+        val ids = (dragOrder ?: currentIds).toMutableList()
+        val f = ids.indexOf(from.key)
+        val t = ids.indexOf(to.key)
+        if (f >= 0 && t >= 0) {
+            ids.add(t, ids.removeAt(f))
+            dragOrder = ids
+        }
+    }
+    val colors = MaterialTheme.colorScheme
     val latest = codes.mapNotNull { arrivals[it]?.fetchedAt }.maxOrNull()
     val offline = codes.any { arrivals[it]?.error != null }
 
@@ -101,6 +133,7 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace
     }, modifier = Modifier.statusBarsPadding()) {
         LazyColumn(
             Modifier.fillMaxSize(),
+            state = listState,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 140.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -124,40 +157,46 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace
                 }
             }
 
-            items(places, key = { "place-${it.id}" }) { place ->
-                PlaceCard(place, soonest(place.stopCodes, arrivals), now, onClick = { onOpenPlace(place.id) }, modifier = Modifier.animateItem())
-            }
-
-            items(wholeStops, key = { "stop-${it.stopCode}" }) { fav ->
-                val id = "stop:${fav.stopCode}"
-                WholeStopCard(
-                    vm, fav.stopCode, arrivals[fav.stopCode]?.services.orEmpty(), now,
-                    expanded = id !in collapsed,
-                    onToggle = { setCollapsed(id, it) },
-                    onClick = { onOpenStop(fav.stopCode) },
-                    modifier = Modifier.animateItem(),
-                )
-            }
-
-            groups.forEach { (code, favs) ->
-                item(key = "group-$code") {
-                    val id = "group:$code"
-                    val expanded = id !in collapsed
-                    Column(Modifier.animateItem()) {
-                        val soonest = favs.mapNotNull { f -> service(f)?.buses?.firstOrNull()?.let { f.serviceNo to it } }.minByOrNull { it.second.eta }
-                        CollapsibleHeader(
-                            title = vm.stop(code)?.description ?: code,
-                            summary = listOfNotNull(
-                                "${favs.size} bus${if (favs.size == 1) "" else "es"}",
-                                soonest?.let { (no, bus) -> "$no ${etaLabel(bus, now).let { if (it == "Arr") "arriving" else "in $it min" }}" },
-                            ).joinToString(" · "),
-                            expanded = expanded,
-                            onToggle = { setCollapsed(id, expanded) },
-                        )
-                        CollapsibleBody(expanded) {
-                            Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
-                                favs.forEachIndexed { i, f ->
-                                    ServiceRow(vm, f.serviceNo, service(f), now, ListItemDefaults.segmentedShapes(i, favs.size), onClick = { onOpenStop(code) })
+            // Places, whole stops and pinned-bus groups, in the user's order; drag the grip to move.
+            items(ordered, key = { it.id }) { card ->
+                ReorderableItem(reorderState, key = card.id) { dragging ->
+                    val handle = Modifier.draggableHandle(
+                        onDragStarted = { haptic(true) },
+                        onDragStopped = { dragOrder?.let(vm::saveCardOrder) },
+                    )
+                    val lift by animateDpAsState(if (dragging) 8.dp else 0.dp, label = "lift")
+                    Box(Modifier.shadow(lift, RoundedCornerShape(28.dp))) {
+                        when (card) {
+                            is HomeCard.PlaceCard -> PlaceCard(card.place, soonest(card.place.stopCodes, arrivals), now, onClick = { onOpenPlace(card.place.id) }, handleModifier = handle)
+                            is HomeCard.StopCard -> WholeStopCard(
+                                vm, card.code, arrivals[card.code]?.services.orEmpty(), now,
+                                expanded = card.id !in collapsed,
+                                onToggle = { setCollapsed(card.id, it) },
+                                onClick = { onOpenStop(card.code) },
+                                handleModifier = handle,
+                            )
+                            is HomeCard.GroupCard -> {
+                                val expanded = card.id !in collapsed
+                                Column(Modifier.background(colors.surface)) {
+                                    val soonest = card.favs.mapNotNull { f -> service(f)?.buses?.firstOrNull()?.let { f.serviceNo to it } }.minByOrNull { it.second.eta }
+                                    CollapsibleHeader(
+                                        title = vm.stop(card.code)?.description ?: card.code,
+                                        summary = listOfNotNull(
+                                            "${card.favs.size} bus${if (card.favs.size == 1) "" else "es"}",
+                                            soonest?.let { (no, bus) -> "$no ${etaLabel(bus, now).let { if (it == "Arr") "arriving" else "in $it min" }}" },
+                                        ).joinToString(" · "),
+                                        expanded = expanded,
+                                        onToggle = { setCollapsed(card.id, expanded) },
+                                        onOpen = { onOpenStop(card.code) },
+                                        handleModifier = handle,
+                                    )
+                                    CollapsibleBody(expanded) {
+                                        Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+                                            card.favs.forEachIndexed { i, f ->
+                                                ServiceRow(vm, f.serviceNo, service(f), now, ListItemDefaults.segmentedShapes(i, card.favs.size), onClick = { onOpenStop(card.code) })
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -228,6 +267,7 @@ private fun WholeStopCard(
     expanded: Boolean,
     onToggle: (collapse: Boolean) -> Unit,
     onClick: () -> Unit,
+    handleModifier: Modifier,
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -251,6 +291,7 @@ private fun WholeStopCard(
                         color = colors.onSurfaceVariant,
                     )
                 }
+                DragHandle(handleModifier)
                 ExpandChevron(expanded, onToggle = { onToggle(expanded) })
             }
             CollapsibleBody(expanded) {
@@ -271,12 +312,19 @@ private fun WholeStopCard(
 
 /** Header for a group of pinned buses: tap anywhere on it to collapse or expand. */
 @Composable
-private fun CollapsibleHeader(title: String, summary: String, expanded: Boolean, onToggle: () -> Unit) {
+private fun CollapsibleHeader(
+    title: String,
+    summary: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    onOpen: () -> Unit,
+    handleModifier: Modifier,
+) {
     Row(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .clickable(onClickLabel = if (expanded) "Collapse" else "Expand", onClick = onToggle)
+            .clickable(onClickLabel = "Open stop", onClick = onOpen)
             .padding(start = 8.dp, top = 2.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -286,7 +334,36 @@ private fun CollapsibleHeader(title: String, summary: String, expanded: Boolean,
                 Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+        DragHandle(handleModifier)
         ExpandChevron(expanded, onToggle)
+    }
+}
+
+/** Grip for drag-to-reorder; [handle] carries the drag gesture from the reorderable list. */
+@Composable
+private fun DragHandle(handleModifier: Modifier) {
+    Icon(
+        painterResource(R.drawable.ic_drag),
+        contentDescription = "Drag to reorder",
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = handleModifier.padding(12.dp).size(20.dp),
+    )
+}
+
+/** A reorderable card on Favourites. Ids double as collapse keys and the saved order. */
+private sealed interface HomeCard {
+    val id: String
+
+    data class PlaceCard(val place: Favourite.Place) : HomeCard {
+        override val id get() = "place:${place.id}"
+    }
+
+    data class StopCard(val code: String) : HomeCard {
+        override val id get() = "stop:$code"
+    }
+
+    data class GroupCard(val code: String, val favs: List<Favourite.Service>) : HomeCard {
+        override val id get() = "group:$code"
     }
 }
 
@@ -378,7 +455,7 @@ fun ServiceRow(
 }
 
 @Composable
-private fun PlaceCard(place: Favourite.Place, board: List<Pair<String, ServiceArrivals>>, now: Instant, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun PlaceCard(place: Favourite.Place, board: List<Pair<String, ServiceArrivals>>, now: Instant, onClick: () -> Unit, handleModifier: Modifier, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
     Surface(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(28.dp), color = colors.tertiaryContainer, contentColor = colors.onTertiaryContainer) {
         Column(Modifier.padding(start = 18.dp, end = 14.dp, top = 14.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -390,6 +467,7 @@ private fun PlaceCard(place: Favourite.Place, board: List<Pair<String, ServiceAr
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
+                DragHandle(handleModifier)
                 Icon(painterResource(R.drawable.ic_chevron_right), null)
             }
             val next = board.take(4)

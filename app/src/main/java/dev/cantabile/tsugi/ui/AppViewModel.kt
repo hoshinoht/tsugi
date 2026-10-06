@@ -69,6 +69,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val alertMinutes: StateFlow<Int> =
         c.settings.alertMinutes.stateIn(viewModelScope, SharingStarted.Eagerly, 2)
 
+    val cardOrder: StateFlow<List<String>> =
+        c.settings.cardOrder.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun saveCardOrder(ids: List<String>) {
+        viewModelScope.launch { c.settings.setCardOrder(ids) }
+    }
+
     val recentStops: StateFlow<List<String>> =
         c.settings.recentStops.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
