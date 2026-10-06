@@ -2,6 +2,7 @@ package dev.cantabile.tsugi.ui
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -48,7 +49,13 @@ import java.time.Instant
 
 
 @Composable
-fun NearbyScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onRequestLocation: () -> Unit, onOpenSettings: () -> Unit) {
+fun NearbyScreen(
+    vm: AppViewModel,
+    onOpenStop: (String) -> Unit,
+    onRequestLocation: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenStation: (String) -> Unit = {},
+) {
     val state by vm.nearby.collectAsStateWithLifecycle()
     val radius by vm.radiusM.collectAsStateWithLifecycle()
     val arrivals by vm.arrivals.collectAsStateWithLifecycle()
@@ -103,6 +110,13 @@ fun NearbyScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onRequestLocati
                     MessageCard(s.message) { FilledTonalButton(onClick = onRequestLocation) { Text("Try again") } }
                 }
                 is NearbyState.Ready -> {
+                    if (s.stations.isNotEmpty()) {
+                        item(key = "stations") {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                s.stations.forEach { near -> StationChip(near.station, near.distanceM) { onOpenStation(near.station.codes.first()) } }
+                            }
+                        }
+                    }
                     if (s.stops.isEmpty()) {
                         item { MessageCard("No bus stops within $radius m. Try a wider radius.") }
                     }

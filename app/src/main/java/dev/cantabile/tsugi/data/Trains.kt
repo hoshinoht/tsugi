@@ -39,19 +39,22 @@ data class TrainMessageDto(
  * Line colours are fixed rather than themed: people recognise lines by colour.
  * Slightly darkened from the network map so white text stays readable (Circle uses dark text).
  */
-enum class TrainLine(val code: String, val title: String, val color: Color, val onColor: Color = Color.White) {
+enum class TrainLine(val code: String, val title: String, val color: Color, val onColor: Color = Color.White, val lrt: Boolean = false) {
     NSL("NSL", "North South Line", Color(0xFFC62B10)),
     EWL("EWL", "East West Line", Color(0xFF00843D)),
     NEL("NEL", "North East Line", Color(0xFF8A1E9C)),
     CCL("CCL", "Circle Line", Color(0xFFF7A11A), Color(0xFF231A00)),
     DTL("DTL", "Downtown Line", Color(0xFF005EC4)),
     TEL("TEL", "Thomson–East Coast Line", Color(0xFF8A5022)),
-    BPL("BPL", "Bukit Panjang LRT", Color(0xFF5E6B5F)),
-    STL("STL", "Sengkang LRT", Color(0xFF5E6B5F)),
-    PTL("PTL", "Punggol LRT", Color(0xFF5E6B5F));
+    BPL("BPL", "Bukit Panjang LRT", Color(0xFF5E6B5F), lrt = true),
+    STL("STL", "Sengkang LRT", Color(0xFF5E6B5F), lrt = true),
+    PTL("PTL", "Punggol LRT", Color(0xFF5E6B5F), lrt = true);
 
     companion object {
-        fun of(code: String) = entries.firstOrNull { it.code == code }
+        /** Also accepts the codes LTA's other feeds use for the branches and LRTs. */
+        private val ALIASES = mapOf("CGL" to "EWL", "CEL" to "CCL", "SLRT" to "STL", "PLRT" to "PTL")
+
+        fun of(code: String) = (ALIASES[code] ?: code).let { c -> entries.firstOrNull { it.code == c } }
     }
 }
 

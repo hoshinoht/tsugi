@@ -65,8 +65,18 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.cantabile.tsugi.R
 
-/** Full-screen layers over the tabs; the first set one shows (settings, then stop, service, place). */
-private data class Overlay(val stop: String?, val place: String?, val service: String?, val settings: Boolean)
+/**
+ * A full-screen layer over the tabs, saved as a string: "settings", "stop:<code>", "service:<no>",
+ * "place:<id>" or "station:<code>". Layers stack, so a stop can open its station and the station
+ * another stop; back pops one.
+ */
+private object Layer {
+    const val SETTINGS = "settings"
+    fun stop(code: String) = "stop:$code"
+    fun service(no: String) = "service:$no"
+    fun place(id: String) = "place:$id"
+    fun station(code: String) = "station:$code"
+}
 
 enum class Tab(val label: String, val icon: Int, val iconSelected: Int) {
     Saved("Saved", R.drawable.ic_star_outline, R.drawable.ic_star),
@@ -74,7 +84,7 @@ enum class Tab(val label: String, val icon: Int, val iconSelected: Int) {
     Search("Search", R.drawable.ic_search, R.drawable.ic_search),
 }
 
-/** Tab + optional stop overlay. Three screens don't need a navigation library. */
+/** Tabs plus a stack of full-screen layers. A few screens don't need a navigation library. */
 @Composable
 fun TsugiRoot(
     requestedStop: String? = null,
@@ -83,20 +93,17 @@ fun TsugiRoot(
     vm: AppViewModel = viewModel(),
 ) {
     var tab by rememberSaveable { mutableStateOf(Tab.Saved) }
-    var openStop by rememberSaveable { mutableStateOf<String?>(null) }
-    var openPlace by rememberSaveable { mutableStateOf<String?>(null) }
-    var settingsOpen by rememberSaveable { mutableStateOf(false) }
-    var openService by rememberSaveable { mutableStateOf<String?>(null) }
+    var layers by rememberSaveable { mutableStateOf(listOf<String>()) }
+    // Opening what's already on top does nothing, so double taps don't stack copies.
+    val push: (String) -> Unit = { layer -> if (layers.lastOrNull() != layer) layers = layers + layer }
+    val pop: () -> Unit = { layers = layers.dropLast(1) }
     LaunchedEffect(requestedStop, requestedTab) {
         if (requestedStop != null || requestedTab != null) {
-            requestedStop?.let { openStop = it }
             Tab.entries.firstOrNull { it.name == requestedTab }?.let {
                 tab = it
-                openStop = null
-                openPlace = null
-                openService = null
-                settingsOpen = false
+                layers = emptyList()
             }
+            requestedStop?.let { push(Layer.stop(it)) }
             onRequestHandled()
         }
     }
@@ -115,18 +122,12 @@ fun TsugiRoot(
     }
 
     // Predictive back for the full-screen layers: the top one shrinks as you swipe, then closes.
-    // Order: settings, then stop, then service, then place.
-    val overlayOpen = settingsOpen || openStop != null || openService != null || openPlace != null
+    val overlayOpen = layers.isNotEmpty()
     var backProgress by remember { mutableFloatStateOf(0f) }
     PredictiveBackHandler(enabled = overlayOpen) { events ->
         try {
             events.collect { backProgress = it.progress }
-            when {
-                settingsOpen -> settingsOpen = false
-                openStop != null -> openStop = null
-                openService != null -> openService = null
-                else -> openPlace = null
-            }
+            pop()
         } finally {
             backProgress = 0f
         }
@@ -146,35 +147,43 @@ fun TsugiRoot(
     val exitSpec = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         AnimatedContent(
-            targetState = Overlay(openStop, openPlace, openService, settingsOpen),
+            targetState = layers.lastOrNull(),
             transitionSpec = { fadeIn(enterSpec) togetherWith fadeOut(exitSpec) },
-            label = "stop",
-        ) { (stopCode, placeId, serviceNo, settings) ->
-            if (settings) {
-                Box(peek) { SettingsScreen(vm, onBack = { settingsOpen = false }) }
-            } else if (stopCode != null) {
-                Box(peek) { StopScreen(vm, stopCode, onBack = { openStop = null }, onOpenStop = { openStop = it }) }
-            } else if (serviceNo != null) {
-                Box(peek) { ServiceScreen(vm, serviceNo, onBack = { openService = null }, onOpenStop = { openStop = it }) }
-            } else if (placeId != null) {
-                Box(peek) { PlaceScreen(vm, placeId, onBack = { openPlace = null }, onOpenStop = { openStop = it }) }
+            label = "layer",
+        ) { layer ->
+            val kind = layer?.substringBefore(':')
+            val arg = layer?.substringAfter(':', "").orEmpty()
+            val openStop: (String) -> Unit = { push(Layer.stop(it)) }
+            val openStation: (String) -> Unit = { push(Layer.station(it)) }
+            if (layer != null) {
+                Box(peek) {
+                    when (kind) {
+                        "settings" -> SettingsScreen(vm, onBack = pop)
+                        "stop" -> StopScreen(vm, arg, onBack = pop, onOpenStop = openStop, onOpenStation = openStation, onOpenService = { push(Layer.service(it)) })
+                        "service" -> ServiceScreen(vm, arg, onBack = pop, onOpenStop = openStop)
+                        "place" -> PlaceScreen(vm, arg, onBack = pop, onOpenStop = openStop)
+                        "station" -> StationScreen(vm, arg, onBack = pop, onOpenStop = openStop)
+                    }
+                }
             } else {
                 // The toolbar slides away while scrolling down and comes back on scroll up.
                 val toolbarScroll = FloatingToolbarDefaults.exitAlwaysScrollBehavior(FloatingToolbarExitDirection.Bottom)
                 Box(Modifier.fillMaxSize().nestedScroll(toolbarScroll)) {
-                    val open: (String) -> Unit = { openStop = it }
+                    val open: (String) -> Unit = { push(Layer.stop(it)) }
+                    val openSettings = { push(Layer.SETTINGS) }
                     tabStates.SaveableStateProvider(tab.name) {
                         when (tab) {
-                            Tab.Saved -> FavouritesScreen(vm, open, onOpenPlace = { openPlace = it }, onOpenSettings = { settingsOpen = true })
-                            Tab.Nearby -> NearbyScreen(vm, open, requestLocation, onOpenSettings = { settingsOpen = true })
+                            Tab.Saved -> FavouritesScreen(vm, open, onOpenPlace = { push(Layer.place(it)) }, onOpenSettings = openSettings, onOpenStation = { push(Layer.station(it)) })
+                            Tab.Nearby -> NearbyScreen(vm, open, requestLocation, onOpenSettings = openSettings, onOpenStation = { push(Layer.station(it)) })
                             Tab.Search -> SearchScreen(
                                 vm, open,
-                                onOpenService = { openService = it },
+                                onOpenService = { push(Layer.service(it)) },
+                                onOpenStation = { push(Layer.station(it)) },
                                 onShowNearby = {
                                     vm.showNearbyAt(it)
                                     tab = Tab.Nearby
                                 },
-                                onOpenSettings = { settingsOpen = true },
+                                onOpenSettings = openSettings,
                             )
                         }
                     }

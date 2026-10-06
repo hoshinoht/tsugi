@@ -1,6 +1,8 @@
 package dev.cantabile.tsugi.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -29,10 +31,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -46,17 +50,27 @@ import dev.cantabile.tsugi.data.Favourite
 import dev.cantabile.tsugi.data.allStopCodes
 import dev.cantabile.tsugi.tracking.Tracked
 import dev.cantabile.tsugi.data.ServiceArrivals
+import dev.cantabile.tsugi.data.Station
 import dev.cantabile.tsugi.data.StopSort
 import dev.cantabile.tsugi.data.stopsAwayLabel
 import java.time.Duration
 import java.time.Instant
 
 @Composable
-fun StopScreen(vm: AppViewModel, code: String, onBack: () -> Unit, onOpenStop: (String) -> Unit = {}) {
+fun StopScreen(
+    vm: AppViewModel,
+    code: String,
+    onBack: () -> Unit,
+    onOpenStop: (String) -> Unit = {},
+    onOpenStation: (String) -> Unit = {},
+    onOpenService: (String) -> Unit = {},
+) {
     val colors = MaterialTheme.colorScheme
     val favourites by vm.favourites.collectAsStateWithLifecycle()
     val arrivals by vm.arrivals.collectAsStateWithLifecycle()
-    vm.stops.collectAsStateWithLifecycle()
+    val allStops by vm.stops.collectAsStateWithLifecycle()
+    val stationIndex by vm.stations.collectAsStateWithLifecycle()
+    val stations = remember(code, stationIndex, allStops) { vm.stationsNearStop(code) }
     PollArrivals(vm, listOf(code))
     LaunchedEffect(code) { vm.refreshHere() }
     val now = rememberNow(1_000)
@@ -116,6 +130,11 @@ fun StopScreen(vm: AppViewModel, code: String, onBack: () -> Unit, onOpenStop: (
                             style = MaterialTheme.typography.bodyMedium,
                             color = colors.onSurfaceVariant,
                         )
+                        if (stations.isNotEmpty()) {
+                            FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                stations.forEach { near -> StationChip(near.station, near.distanceM) { onOpenStation(near.station.codes.first()) } }
+                            }
+                        }
                         stop?.let { StopMap(vm, it, onOpenStop, Modifier.padding(top = 12.dp)) }
                         RefreshProgress(data?.fetchedAt, now)
                         SortToggle(sort, onSort = vm::setStopSort)
@@ -143,10 +162,29 @@ fun StopScreen(vm: AppViewModel, code: String, onBack: () -> Unit, onOpenStop: (
                             },
                             tracking = tracking.tracked == Tracked(code, service.serviceNo),
                             onToggleTracking = { toggleTracking(service.serviceNo) },
+                            onOpenRoute = { onOpenService(service.serviceNo) },
                         )
                     }
                 }
             }
+        }
+    }
+}
+
+/** "Bugis MRT · 80 m" with its lines' colours; opens the station. */
+@Composable
+fun StationChip(station: Station, distanceM: Int?, onClick: () -> Unit) {
+    Surface(onClick = onClick, shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+        Row(
+            Modifier.padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            station.lines.forEach { LineBadge(it, it.code) }
+            Text(
+                listOfNotNull(station.title, distanceM?.let { "$it m" }).joinToString(" · "),
+                style = MaterialTheme.typography.labelLarge,
+            )
         }
     }
 }
@@ -200,13 +238,18 @@ private fun ServiceCard(
     onTogglePin: () -> Unit,
     tracking: Boolean,
     onToggleTracking: () -> Unit,
+    onOpenRoute: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
     val running = service.buses.isNotEmpty()
     Surface(modifier = modifier, shape = RoundedCornerShape(24.dp), color = colors.surfaceContainer) {
         Column(Modifier.padding(start = 12.dp, end = 8.dp, top = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                ServiceBadge(service.serviceNo, active = running)
+                ServiceBadge(
+                    service.serviceNo,
+                    active = running,
+                    modifier = Modifier.clip(RoundedCornerShape(14.dp)).clickable(onClickLabel = "Show route", onClick = onOpenRoute),
+                )
                 Column(Modifier.weight(1f)) {
                     Text(
                         service.buses.firstOrNull()?.let { vm.stop(it.destinationCode)?.description } ?: "Not running now",

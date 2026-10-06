@@ -29,6 +29,18 @@ class LtaApi(
     /** Line status and disruption alerts for the whole MRT/LRT network. */
     suspend fun trainServiceAlerts(): TrainAlertsResponse? = get("TrainServiceAlerts")
 
+    /** Crowding at every station on [line] (e.g. "NSL", "CGL", "SLRT") for the last 10 minutes. */
+    suspend fun crowdRealTime(line: String): List<CrowdRealTimeDto> =
+        get<CrowdRealTimeResponse>("PCDRealTime?TrainLine=$line")?.value.orEmpty()
+
+    /** Forecast crowding at every station on [line], in half-hours, for today. */
+    suspend fun crowdForecast(line: String): List<CrowdForecastDayDto> =
+        get<CrowdForecastResponse>("PCDForecast?TrainLine=$line")?.value.orEmpty()
+
+    /** Lifts under maintenance across the network. */
+    suspend fun liftMaintenance(): List<LiftMaintenanceDto> =
+        get<LiftMaintenanceResponse>("v2/FacilitiesMaintenance")?.value.orEmpty()
+
     /** One page of up to 500 stops. */
     suspend fun busStops(skip: Int): List<BusStopDto> =
         get<BusStopsResponse>("BusStops?\$skip=$skip")?.value.orEmpty()

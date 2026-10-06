@@ -46,6 +46,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.cantabile.tsugi.R
+import dev.cantabile.tsugi.data.lineOfCode
 import dev.cantabile.tsugi.data.AddressHit
 import dev.cantabile.tsugi.data.BusStop
 import dev.cantabile.tsugi.data.allStopCodes
@@ -59,6 +60,7 @@ fun SearchScreen(
     vm: AppViewModel,
     onOpenStop: (String) -> Unit,
     onOpenService: (String) -> Unit,
+    onOpenStation: (String) -> Unit,
     onShowNearby: (AddressHit) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
@@ -71,6 +73,8 @@ fun SearchScreen(
     val favourites by vm.favourites.collectAsStateWithLifecycle()
     val results = remember(query, stops) { vm.search(query) }
     val services = remember(query, routes) { vm.searchServices(query) }
+    val stationIndex by vm.stations.collectAsStateWithLifecycle()
+    val stations = remember(query, stationIndex) { vm.searchStations(query) }
     // Buildings, addresses and postal codes from OneMap, debounced so typing doesn't spam it.
     var addresses by remember { mutableStateOf<List<AddressHit>>(emptyList()) }
     LaunchedEffect(query) {
@@ -161,6 +165,23 @@ fun SearchScreen(
                         ) { Text(directions.values.firstOrNull()?.firstOrNull()?.operator?.let(::operatorName) ?: "Bus $no") }
                     }
                 }
+                if (stations.isNotEmpty()) {
+                    item { SearchSection("Train stations") }
+                    itemsIndexed(stations, key = { _, st -> "stn-${st.codes.first()}" }) { i, station ->
+                        SegmentedListItem(
+                            onClick = { onOpenStation(station.codes.first()) },
+                            shapes = ListItemDefaults.segmentedShapes(i, stations.size),
+                            modifier = Modifier.animateItem(),
+                            colors = ListItemDefaults.segmentedColors(containerColor = colors.surfaceContainer),
+                            leadingContent = {
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    station.codes.take(3).forEach { c -> LineBadge(lineOfCode(c), c, label = c) }
+                                }
+                            },
+                            supportingContent = { Text(station.lines.joinToString(" · ") { it.title }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        ) { Text(station.title) }
+                    }
+                }
                 if (addresses.isNotEmpty()) {
                     item { SearchSection("Places & addresses") }
                     itemsIndexed(addresses, key = { i, a -> "addr-$i-${a.name}" }) { i, hit ->
@@ -176,10 +197,10 @@ fun SearchScreen(
                     }
                 }
                 if (results.isNotEmpty()) {
-                    if (services.isNotEmpty() || addresses.isNotEmpty()) item { SearchSection("Bus stops") }
+                    if (services.isNotEmpty() || addresses.isNotEmpty() || stations.isNotEmpty()) item { SearchSection("Bus stops") }
                     stopRows(results, "stop", openStop)
                 }
-                if (results.isEmpty() && addresses.isEmpty() && services.isEmpty()) {
+                if (results.isEmpty() && addresses.isEmpty() && services.isEmpty() && stations.isEmpty()) {
                     item { Text("Nothing matches “$query”.", Modifier.padding(8.dp), color = colors.onSurfaceVariant) }
                 }
             }
@@ -215,7 +236,7 @@ private fun LazyListScope.emptyState(
                 EXAMPLES.forEach { example -> AssistChip(onClick = { onExample(example) }, label = { Text(example) }) }
             }
             Text(
-                "Stop names and roads, 5-digit stop codes, bus numbers, buildings and postal codes.",
+                "Stop names and roads, 5-digit stop codes, bus numbers, MRT stations, buildings and postal codes.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 8.dp),

@@ -11,6 +11,16 @@ import androidx.compose.ui.graphics.asImageBitmap
 import dev.cantabile.tsugi.data.AddressHit
 import dev.cantabile.tsugi.data.MapPin
 import dev.cantabile.tsugi.data.Bus
+import dev.cantabile.tsugi.data.Crowding
+import dev.cantabile.tsugi.data.LiftMaintenanceDto
+import dev.cantabile.tsugi.data.NearbyStation
+import dev.cantabile.tsugi.data.STATION_NEAR_STOP_M
+import dev.cantabile.tsugi.data.STOPS_NEAR_STATION_M
+import dev.cantabile.tsugi.data.Station
+import dev.cantabile.tsugi.data.StationIndex
+import dev.cantabile.tsugi.data.byStation
+import dev.cantabile.tsugi.data.crowdLineOf
+import dev.cantabile.tsugi.data.forecastByStation
 import dev.cantabile.tsugi.data.BusStop
 import dev.cantabile.tsugi.data.distanceM
 import dev.cantabile.tsugi.data.stopsAway
@@ -54,7 +64,12 @@ sealed interface NearbyState {
     data object NeedsPermission : NearbyState
     data object Locating : NearbyState
     /** [label] is set when showing stops around a searched address instead of your location. */
-    data class Ready(val stops: List<NearbyStop>, val precise: Boolean, val label: String? = null) : NearbyState
+    data class Ready(
+        val stops: List<NearbyStop>,
+        val precise: Boolean,
+        val label: String? = null,
+        val stations: List<NearbyStation> = emptyList(),
+    ) : NearbyState
     data class Failed(val message: String) : NearbyState
 }
 
@@ -159,6 +174,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             runCatching { c.serviceInfo.ensureLoaded() }
             fillScheduled()
         }
+        viewModelScope.launch {
+            runCatching { c.stations.ensureLoaded() }
+            recomputeNearby()
+        }
         // Keep the home-screen widget in step with favourites (skips the initial load).
         viewModelScope.launch {
             c.favourites.favourites.drop(1).collect { runCatching { refreshFavouritesWidget(app) } }
@@ -229,6 +248,79 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val here = _here.value ?: return null
         val stop = c.stops[stopCode] ?: return null
         return distanceM(here.latitude, here.longitude, stop.lat, stop.lng)
+    }
+
+    // ---- MRT and LRT stations ----
+
+    val stations: StateFlow<StationIndex?> = c.stations.index
+
+    fun station(code: String): Station? = stations.value?.get(code)
+
+    fun searchStations(query: String): List<Station> = stations.value?.search(query).orEmpty()
+
+    /** Stations whose nearest exit is within [STATION_NEAR_STOP_M] of a bus stop: "the stop at Bugis MRT". */
+    fun stationsNearStop(code: String): List<NearbyStation> {
+        val stop = c.stops[code] ?: return emptyList()
+        return stations.value?.nearby(stop.lat, stop.lng, STATION_NEAR_STOP_M).orEmpty()
+    }
+
+    /** A bus stop near a station, with the exit it's closest to. */
+    data class StopAtStation(val stop: BusStop, val exit: String?, val distanceM: Int)
+
+    /** Bus stops within [STOPS_NEAR_STATION_M] of a station's exits, closest first. */
+    fun stopsNearStation(station: Station): List<StopAtStation> =
+        c.stops.nearby(station.lat, station.lng, STOPS_NEAR_STATION_M + 400, limit = 80).mapNotNull { near ->
+            val s = near.stop
+            val exit = station.exits.minByOrNull { distanceM(s.lat, s.lng, it.lat, it.lng) }
+            val d = minOf(exit?.let { distanceM(s.lat, s.lng, it.lat, it.lng) } ?: Int.MAX_VALUE, near.distanceM)
+            StopAtStation(s, exit?.name?.takeIf { it.isNotBlank() }, d).takeIf { d <= STOPS_NEAR_STATION_M }
+        }.sortedBy { it.distanceM }
+
+    private val _crowding = MutableStateFlow<Map<String, Crowding>>(emptyMap())
+    /** Crowding by canonical station code, for the lines fetched so far. */
+    val crowding = _crowding.asStateFlow()
+    private val crowdFetched = mutableMapOf<String, Instant>()
+
+    /**
+     * Fetches real-time and forecast crowding for [lines] (crowd-feed line codes, see [crowdLineOf]).
+     * LTA updates real-time levels every 10 minutes, so lines fetched more recently are skipped.
+     */
+    suspend fun refreshCrowding(lines: Collection<String>) = coroutineScope {
+        val now = Instant.now()
+        lines.distinct()
+            .filter { crowdFetched[it]?.isAfter(now.minusSeconds(CROWD_FRESH_SECONDS)) != true }
+            .map { line ->
+                async {
+                    val realtime = runCatching { c.api.crowdRealTime(line) }.getOrNull() ?: return@async emptyMap()
+                    val forecast = runCatching { c.api.crowdForecast(line) }.getOrNull().orEmpty()
+                        .forecastByStation(ZonedDateTime.now(SINGAPORE))
+                    crowdFetched[line] = now
+                    realtime.byStation().mapValues { (code, level) -> Crowding(level, forecast[code].orEmpty()) }
+                }
+            }
+            .awaitAll()
+            .forEach { fresh -> _crowding.update { it + fresh } }
+    }
+
+    private val _lifts = MutableStateFlow<List<LiftMaintenanceDto>?>(null)
+    /** Lifts under maintenance network-wide; null until fetched. */
+    val lifts = _lifts.asStateFlow()
+    private var liftsFetched: Instant? = null
+
+    suspend fun refreshLifts() {
+        if (liftsFetched?.isAfter(Instant.now().minusSeconds(CROWD_FRESH_SECONDS)) == true) return
+        runCatching { c.api.liftMaintenance() }.getOrNull()?.let {
+            _lifts.value = it
+            liftsFetched = Instant.now()
+        }
+    }
+
+    /** Saves [codes] as a new place called [name], e.g. a station's bus stops. */
+    fun createPlace(name: String, codes: List<String>) {
+        if (codes.isEmpty()) return
+        viewModelScope.launch {
+            c.favourites.update { it + Favourite.Place(UUID.randomUUID().toString(), name, codes.distinct()) }
+        }
     }
 
     private fun fillScheduled() {
@@ -343,6 +435,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private companion object {
         const val FRESH_SECONDS = 10L
+        const val CROWD_FRESH_SECONDS = 10 * 60L
     }
 
     private fun recomputeNearby() {
@@ -355,6 +448,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             stops = c.stops.nearby(location.latitude, location.longitude, radiusM.value),
             precise = locationLabel != null || c.location.hasPreciseLocation(),
             label = locationLabel,
+            // Stations are bigger than stops, so look a little further for them.
+            stations = stations.value?.nearby(location.latitude, location.longitude, radiusM.value + 200).orEmpty().take(3),
         )
     }
 }

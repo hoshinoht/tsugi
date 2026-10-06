@@ -69,7 +69,13 @@ import dev.cantabile.tsugi.data.ServiceArrivals
 import java.time.Instant
 
 @Composable
-fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace: (String) -> Unit, onOpenSettings: () -> Unit) {
+fun FavouritesScreen(
+    vm: AppViewModel,
+    onOpenStop: (String) -> Unit,
+    onOpenPlace: (String) -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenStation: (String) -> Unit = {},
+) {
     val favourites by vm.favourites.collectAsStateWithLifecycle()
     val loaded by vm.favouritesLoaded.collectAsStateWithLifecycle()
     val here by vm.here.collectAsStateWithLifecycle()
@@ -149,7 +155,7 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace
                     SettingsButton(onOpenSettings)
                 })
             }
-            item(key = "trains") { TrainStatusCard(vm) }
+            item(key = "trains") { TrainStatusCard(vm, onOpenStation = onOpenStation) }
 
             if (loaded && favourites.isEmpty()) {
                 item {
