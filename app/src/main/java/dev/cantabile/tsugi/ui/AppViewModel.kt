@@ -9,7 +9,10 @@ import dev.cantabile.tsugi.data.AddressHit
 import dev.cantabile.tsugi.data.BusStop
 import dev.cantabile.tsugi.data.Favourite
 import dev.cantabile.tsugi.data.NearbyStop
+import dev.cantabile.tsugi.data.ServiceArrivals
 import dev.cantabile.tsugi.data.StopArrivals
+import dev.cantabile.tsugi.data.firstBusLabel
+import dev.cantabile.tsugi.data.operatorName
 import dev.cantabile.tsugi.data.TrainStatus
 import dev.cantabile.tsugi.data.placeNameFrom
 import dev.cantabile.tsugi.data.serviceOrder
@@ -74,8 +77,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var lastLocation: Location? = null
     private var locationLabel: String? = null
 
+    val routes = c.routes.index
+
     init {
         loadStops()
+        // Routes list every service at a stop, including ones LTA's arrivals feed omits because
+        // they aren't running now. Once loaded, fill those into data already on screen.
+        viewModelScope.launch {
+            runCatching { c.routes.ensureLoaded() }
+            _arrivals.update { all -> all.mapValues { (code, a) -> a.copy(services = withScheduled(code, a.services)) } }
+        }
         // Keep the home-screen widget in step with favourites (skips the initial load).
         viewModelScope.launch {
             c.favourites.favourites.drop(1).collect { runCatching { refreshFavouritesWidget(app) } }
@@ -116,9 +127,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return runCatching { c.api.busArrival(code) }.fold(
             onSuccess = { response ->
                 StopArrivals(
-                    services = response?.services.orEmpty()
-                        .map { it.toDomain() }
-                        .sortedWith(compareBy(serviceOrder) { it.serviceNo }),
+                    services = withScheduled(code, response?.services.orEmpty().map { it.toDomain() }),
                     fetchedAt = Instant.now(),
                 )
             },
@@ -133,6 +142,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         runCatching { c.api.trainServiceAlerts() }.getOrNull()?.let {
             _trainStatus.value = it.value.toDomain(Instant.now())
         }
+    }
+
+    /**
+     * Adds services that serve [code] but aren't in LTA's live feed (not running right now),
+     * with today's first-bus time, and sorts everything by service number.
+     */
+    private fun withScheduled(code: String, live: List<ServiceArrivals>): List<ServiceArrivals> {
+        val routes = c.routes.index.value?.byStop?.get(code).orEmpty()
+        fun firstBus(service: String) = routes.firstOrNull { it.service == service }?.firstBusLabel()
+        val present = live.map { it.serviceNo }.toSet()
+        val missing = routes.distinctBy { it.service }.filter { it.service !in present }.map {
+            ServiceArrivals(it.service, operatorName(it.operator), emptyList(), firstBus = it.firstBusLabel())
+        }
+        return (live.map { if (it.buses.isEmpty() && it.firstBus == null) it.copy(firstBus = firstBus(it.serviceNo)) else it } + missing)
+            .sortedWith(compareBy(serviceOrder) { it.serviceNo })
     }
 
     fun toggleFavourite(favourite: Favourite) {

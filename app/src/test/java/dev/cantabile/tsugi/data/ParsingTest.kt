@@ -140,3 +140,37 @@ class OneMapParsingTest {
         assertTrue(json.decodeFromString<OneMapSearchResponse>(body).toHits().isEmpty())
     }
 }
+
+class RoutesTest {
+    private val row = RouteStop(
+        service = "12e", operator = "SBST", direction = 1, seq = 5, stop = "78189",
+        wd = listOf("1719", "2306"), sat = listOf("-", "-"), sun = listOf("0005", "0121"),
+    )
+
+    @Test
+    fun hhmmLabel_formats12Hour() {
+        assertEquals("6:53 am", hhmmLabel("0653"))
+        assertEquals("12:05 am", hhmmLabel("0005"))
+        assertEquals("12:30 pm", hhmmLabel("1230"))
+        assertEquals("11:06 pm", hhmmLabel("2306"))
+        assertNull(hhmmLabel("-"))
+    }
+
+    @Test
+    fun firstBus_usesTodaysTimetable() {
+        // 2026-10-07 is a Wednesday, 2026-10-10 a Saturday, 2026-10-11 a Sunday.
+        fun at(date: String) = java.time.ZonedDateTime.parse("${date}T12:00:00+08:00[Asia/Singapore]")
+        assertEquals("5:19 pm", row.firstBusLabel(at("2026-10-07")))
+        assertNull(row.firstBusLabel(at("2026-10-10")))
+        assertEquals("12:05 am", row.firstBusLabel(at("2026-10-11")))
+    }
+
+    @Test
+    fun index_groupsByStopAndOrdersRoutes() {
+        val index = RoutesIndex(
+            listOf(row.copy(seq = 2, stop = "B"), row.copy(seq = 1, stop = "A"), row.copy(service = "17", stop = "A")),
+        )
+        assertEquals(listOf("12e", "17"), index.servicesAt("A"))
+        assertEquals(listOf("A", "B"), index.byService.getValue("12e").getValue(1).map { it.stop })
+    }
+}

@@ -210,7 +210,7 @@ private fun ServiceCard(
                 ServiceBadge(service.serviceNo, active = running)
                 Column(Modifier.weight(1f)) {
                     Text(
-                        service.buses.firstOrNull()?.let { vm.stop(it.destinationCode)?.description } ?: "Not operating now",
+                        service.buses.firstOrNull()?.let { vm.stop(it.destinationCode)?.description } ?: "Not running now",
                         style = MaterialTheme.typography.titleMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -233,6 +233,14 @@ private fun ServiceCard(
                         tint = if (pinned) colors.primary else colors.onSurfaceVariant,
                     )
                 }
+            }
+            if (!running && service.firstBus != null) {
+                Text(
+                    "First bus ${service.firstBus}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
             }
             if (running) {
                 Row(Modifier.padding(end = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {

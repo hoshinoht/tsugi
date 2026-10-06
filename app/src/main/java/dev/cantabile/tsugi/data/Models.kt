@@ -85,6 +85,8 @@ data class ServiceArrivals(
     val operator: String,
     /** Empty when the service is not running right now. */
     val buses: List<Bus>,
+    /** Today's scheduled first bus at this stop, e.g. "6:53 am", for services not running now. */
+    val firstBus: String? = null,
 )
 
 data class StopArrivals(

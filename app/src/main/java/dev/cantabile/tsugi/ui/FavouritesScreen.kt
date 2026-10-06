@@ -208,7 +208,9 @@ fun ServiceRow(
         modifier = modifier.heightIn(min = 72.dp),
         colors = ListItemDefaults.segmentedColors(containerColor = colors.surfaceContainer),
         leadingContent = { ServiceBadge(serviceNo, active = first != null) },
-        supportingContent = first?.let {
+        supportingContent = if (first == null && service?.firstBus != null) {
+            { Text("First bus ${service.firstBus}", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant) }
+        } else first?.let {
             {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     LoadBars(it.load, colors.onSurface)
@@ -245,7 +247,7 @@ fun ServiceRow(
         },
     ) {
         Text(
-            first?.let { vm.stop(it.destinationCode)?.description } ?: if (service == null) "Loading…" else "Not operating now",
+            first?.let { vm.stop(it.destinationCode)?.description } ?: if (service == null) "Loading…" else "Not running now",
             style = MaterialTheme.typography.titleMedium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

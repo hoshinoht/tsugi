@@ -194,7 +194,7 @@ private fun NearbyStopCard(
                                         Text(s.serviceNo, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                         Text(
                                             when {
-                                                first == null -> "Not running"
+                                                first == null -> s.firstBus?.let { "from $it" } ?: "Not running"
                                                 arriving -> "Arriving"
                                                 else -> "${minutesUntil(first.eta, now)} min"
                                             },
