@@ -40,6 +40,7 @@ import java.time.Instant
 @Composable
 fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace: (String) -> Unit) {
     val favourites by vm.favourites.collectAsStateWithLifecycle()
+    val loaded by vm.favouritesLoaded.collectAsStateWithLifecycle()
     val arrivals by vm.arrivals.collectAsStateWithLifecycle()
     vm.stops.collectAsStateWithLifecycle() // recompose once stop names are available
     val codes = remember(favourites) { favourites.flatMap { it.allStopCodes }.distinct() }
@@ -73,7 +74,7 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace
             item { ScreenTitle("Favourites", trailing = { if (codes.isNotEmpty()) LiveChip(latest, now, offline) }) }
             item(key = "trains") { TrainStatusCard(vm) }
 
-            if (favourites.isEmpty()) {
+            if (loaded && favourites.isEmpty()) {
                 item {
                     MessageCard("Nothing saved yet. Open a stop from Nearby or Search, then tap the star to save the whole stop, or the star on a bus to save just that one.")
                 }

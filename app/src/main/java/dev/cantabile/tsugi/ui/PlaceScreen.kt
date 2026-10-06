@@ -56,8 +56,9 @@ fun PlaceScreen(vm: AppViewModel, placeId: String, onBack: () -> Unit, onOpenSto
     var renaming by rememberSaveable { mutableStateOf(false) }
     val now = rememberNow()
 
-    // Deleted (or its last stop removed) from elsewhere: leave.
-    LaunchedEffect(place == null) { if (place == null) onBack() }
+    val loaded by vm.favouritesLoaded.collectAsStateWithLifecycle()
+    // Deleted (or its last stop removed): leave. Wait for favourites to load first.
+    LaunchedEffect(loaded, place == null) { if (loaded && place == null) onBack() }
     if (place == null) return
     PollArrivals(vm, place.stopCodes)
 

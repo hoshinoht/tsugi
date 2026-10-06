@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -47,6 +48,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val stops: StateFlow<List<BusStop>> = c.stops.stops
     val favourites: StateFlow<List<Favourite>> =
         c.favourites.favourites.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** False until favourites have been read from disk, so screens don't mistake "loading" for "empty". */
+    val favouritesLoaded: StateFlow<Boolean> =
+        c.favourites.favourites.map { true }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val _stopsStatus = MutableStateFlow<StopsStatus>(StopsStatus.Loading)
     val stopsStatus = _stopsStatus.asStateFlow()
