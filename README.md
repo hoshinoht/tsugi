@@ -49,3 +49,7 @@ Tests: `./gradlew testDebugUnitTest`.
 ## Stack
 
 AGP 9.4 with built-in Kotlin, Kotlin 2.4, Compose BOM 2026.09, Material 3 `1.5.0-alpha29` (for the Expressive APIs), OkHttp, kotlinx.serialization and DataStore. minSdk 36 (Android 16).
+
+## License
+
+[MIT](LICENSE). Bus and train data are from LTA DataMall, and address search uses OneMap; both have their own terms of use.
