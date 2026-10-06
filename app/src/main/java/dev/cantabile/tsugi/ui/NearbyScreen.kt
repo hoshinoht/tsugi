@@ -75,7 +75,13 @@ fun NearbyScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onRequestLocati
             item {
                 ScreenTitle(
                     "Nearby",
-                    subtitle = ready?.let { "${it.stops.size} stops within $radius m" + if (!it.precise) " · approximate location" else "" },
+                    subtitle = ready?.let {
+                    listOfNotNull(
+                        it.label?.let { l -> "Near $l" },
+                        "${it.stops.size} stops within $radius m",
+                        "approximate location".takeIf { _ -> !it.precise },
+                    ).joinToString(" · ")
+                },
                 )
             }
             item {

@@ -79,7 +79,10 @@ fun TsugiRoot(vm: AppViewModel = viewModel()) {
                     when (tab) {
                         Tab.Saved -> FavouritesScreen(vm, open, onOpenPlace = { openPlace = it })
                         Tab.Nearby -> NearbyScreen(vm, open, requestLocation)
-                        Tab.Search -> SearchScreen(vm, open)
+                        Tab.Search -> SearchScreen(vm, open, onShowNearby = {
+                            vm.showNearbyAt(it)
+                            tab = Tab.Nearby
+                        })
                     }
                     MainToolbar(
                         current = tab,

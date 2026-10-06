@@ -114,3 +114,29 @@ class ParsingTest {
         assertTrue("got $d", d in 850..1050)
     }
 }
+
+class OneMapParsingTest {
+    private val json = Json { ignoreUnknownKeys = true }
+
+    @Test
+    fun search_mapsAndTitleCasesResults() {
+        // Captured from the live endpoint on 7 Oct 2026.
+        val body = """
+            {"found": 1, "totalNumPages": 1, "pageNum": 1, "results": [{
+              "SEARCHVAL": "ION ORCHARD", "BLK_NO": "2", "ROAD_NAME": "ORCHARD TURN", "BUILDING": "ION ORCHARD",
+              "ADDRESS": "2 ORCHARD TURN ION ORCHARD SINGAPORE 238801", "POSTAL": "238801",
+              "X": "27856.85205532983", "Y": "31812.97287132777",
+              "LATITUDE": "1.303979741445055", "LONGITUDE": "103.832032328465"}]}
+        """.trimIndent()
+        val hit = json.decodeFromString<OneMapSearchResponse>(body).toHits().single()
+        assertEquals("Ion Orchard", hit.name)
+        assertEquals("2 Orchard Turn Ion Orchard Singapore 238801", hit.address)
+        assertEquals(1.303979741445055, hit.lat, 1e-9)
+    }
+
+    @Test
+    fun search_dropsResultsWithoutCoordinates() {
+        val body = """{"found": 1, "results": [{"SEARCHVAL": "X", "ADDRESS": "Y", "LATITUDE": "NIL", "LONGITUDE": ""}]}"""
+        assertTrue(json.decodeFromString<OneMapSearchResponse>(body).toHits().isEmpty())
+    }
+}

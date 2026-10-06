@@ -5,6 +5,7 @@ import android.location.Location
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.cantabile.tsugi.TsugiApplication
+import dev.cantabile.tsugi.data.AddressHit
 import dev.cantabile.tsugi.data.BusStop
 import dev.cantabile.tsugi.data.Favourite
 import dev.cantabile.tsugi.data.NearbyStop
@@ -39,7 +40,8 @@ sealed interface NearbyState {
     data object Idle : NearbyState
     data object NeedsPermission : NearbyState
     data object Locating : NearbyState
-    data class Ready(val stops: List<NearbyStop>, val precise: Boolean) : NearbyState
+    /** [label] is set when showing stops around a searched address instead of your location. */
+    data class Ready(val stops: List<NearbyStop>, val precise: Boolean, val label: String? = null) : NearbyState
     data class Failed(val message: String) : NearbyState
 }
 
@@ -70,6 +72,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _radiusM = MutableStateFlow(400)
     val radiusM = _radiusM.asStateFlow()
     private var lastLocation: Location? = null
+    private var locationLabel: String? = null
 
     init {
         loadStops()
@@ -182,7 +185,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _nearby.value = NearbyState.NeedsPermission
     }
 
+    suspend fun searchAddresses(query: String): List<AddressHit> =
+        runCatching { c.oneMap.search(query) }.getOrDefault(emptyList())
+
+    /** Shows Nearby around a searched address rather than the phone's location. */
+    fun showNearbyAt(hit: AddressHit) {
+        lastLocation = Location("onemap").apply {
+            latitude = hit.lat
+            longitude = hit.lng
+        }
+        locationLabel = hit.name
+        recomputeNearby()
+    }
+
     fun locate() {
+        locationLabel = null
         if (!c.location.hasPermission()) {
             _nearby.value = NearbyState.NeedsPermission
             return
@@ -216,7 +233,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         _nearby.value = NearbyState.Ready(
             stops = c.stops.nearby(location.latitude, location.longitude, _radiusM.value),
-            precise = c.location.hasPreciseLocation(),
+            precise = locationLabel != null || c.location.hasPreciseLocation(),
+            label = locationLabel,
         )
     }
 }

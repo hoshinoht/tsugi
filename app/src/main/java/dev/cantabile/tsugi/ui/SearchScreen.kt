@@ -25,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,14 +41,24 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.cantabile.tsugi.R
+import dev.cantabile.tsugi.data.AddressHit
+import kotlinx.coroutines.delay
 
 @Composable
-fun SearchScreen(vm: AppViewModel, onOpenStop: (String) -> Unit) {
+fun SearchScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onShowNearby: (AddressHit) -> Unit) {
     val colors = MaterialTheme.colorScheme
     var query by rememberSaveable { mutableStateOf("") }
     val stops by vm.stops.collectAsStateWithLifecycle()
     val status by vm.stopsStatus.collectAsStateWithLifecycle()
     val results = remember(query, stops) { vm.search(query) }
+    // Buildings, addresses and postal codes from OneMap, debounced so typing doesn't spam it.
+    var addresses by remember { mutableStateOf<List<AddressHit>>(emptyList()) }
+    LaunchedEffect(query) {
+        addresses = emptyList()
+        if (query.trim().length < 3) return@LaunchedEffect
+        delay(350)
+        addresses = vm.searchAddresses(query).take(6)
+    }
 
     LazyColumn(
         Modifier.statusBarsPadding(),
@@ -59,7 +70,7 @@ fun SearchScreen(vm: AppViewModel, onOpenStop: (String) -> Unit) {
                 value = query,
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp),
-                placeholder = { Text("Stop name, road or 5-digit code") },
+                placeholder = { Text("Stop, road, code, building or postal code") },
                 leadingIcon = { Icon(painterResource(R.drawable.ic_search), null) },
                 trailingIcon = {
                     if (query.isNotEmpty()) {
@@ -96,7 +107,31 @@ fun SearchScreen(vm: AppViewModel, onOpenStop: (String) -> Unit) {
                 }
             }
             StopsStatus.Ready -> {
-                if (query.isNotBlank() && results.isEmpty()) {
+                if (addresses.isNotEmpty()) {
+                    item { SearchSection("Places & addresses") }
+                    itemsIndexed(addresses, key = { i, a -> "addr-$i-${a.name}" }) { i, hit ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 64.dp)
+                                .clip(groupShape(i, addresses.size, outer = 22.dp))
+                                .background(colors.surfaceContainer)
+                                .clickable { onShowNearby(hit) }
+                                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        ) {
+                            Icon(painterResource(R.drawable.ic_place), null, tint = colors.primary)
+                            Column(Modifier.weight(1f)) {
+                                Text(hit.name, style = MaterialTheme.typography.titleMedium)
+                                Text(hit.address, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, maxLines = 1)
+                            }
+                            Text("Stops near", style = MaterialTheme.typography.labelLarge, color = colors.primary)
+                        }
+                    }
+                    if (results.isNotEmpty()) item { SearchSection("Bus stops") }
+                }
+                if (query.isNotBlank() && results.isEmpty() && addresses.isEmpty()) {
                     item { Text("No stops match “$query”.", Modifier.padding(8.dp), color = colors.onSurfaceVariant) }
                 }
                 itemsIndexed(results, key = { _, stop -> stop.code }) { i, stop ->
@@ -126,4 +161,14 @@ fun SearchScreen(vm: AppViewModel, onOpenStop: (String) -> Unit) {
             }
         }
     }
+}
+
+@Composable
+private fun SearchSection(title: String) {
+    Text(
+        title,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 6.dp),
+    )
 }
