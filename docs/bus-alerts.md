@@ -6,17 +6,21 @@ Tap the bell on a bus in a stop's screen, or on the Next up card, to track it. O
 
 | Notification | Channel | Behaviour |
 | --- | --- | --- |
-| Live countdown | Live bus tracking (low importance) | Ongoing; title like "12 in 4 min", destination, stop, crowding and the next bus. Tap to open the stop; **Stop** ends tracking. |
-| Approaching | Bus alerts (high importance) | Heads-up with vibration when the bus is a set time away: 1, 2 (default), 3 or 5 min, chosen in Settings. |
+| Live countdown | Live bus tracking (low importance) | Ongoing; title like "12 in 4 min", destination, stop, how many stops away it is, crowding and the next bus. Tap to open the stop; **Stop** ends tracking. |
+| Approaching | Bus alerts (high importance) | Heads-up with vibration a set time before you need to leave: 1, 2 (default), 3 or 5 min (Settings) plus your walk to the stop. "Leave now for 12 · 5 min walk"; if the bus is already closer than your walk, it says you may miss it and gives the next one. |
 | Arriving | Bus alerts (high importance) | Heads-up when the bus is under a minute away. |
 
 On Android 16 QPR2 (API 36.1) and later the countdown is promoted to a **Live Update**: a progress bar with a bus marker, a status-bar chip showing the minutes, and lock-screen placement. On Android 16 it shows the progress bar only; earlier versions show a standard ongoing notification.
+
+## Walking time
+
+When you tap the bell, the app measures the distance from your last known position to the stop (only if location is already allowed) and passes it to the tracking service, which uses no location itself. Walking is counted at 80 m a minute; under 60 m counts as being at the stop.
 
 ## Timing
 
 | Rule | Value |
 | --- | --- |
-| Poll interval | 20 s, or 60 s while the bus is more than 10 min away |
+| Poll interval | 20 s, or 60 s while the bus is more than 10 min away and further than the alert point |
 | Stops after arrival | 2 min after the arriving alert |
 | Maximum tracking time | 90 min |
 | Gives up without live info | after 10 min, with a notification saying so |

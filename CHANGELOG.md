@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.3.0
+
+### Added
+
+- **Stations:** a screen for every MRT and LRT station with its lines and status, platform crowding now and forecast by the half-hour, lifts under maintenance, and the bus stops at its exits with live arrivals. "Save as place" saves those stops.
+- **Stations everywhere:** bus stops next to a station show it with line colours; Nearby lists stations around you; Search finds stations by name or code.
+- **Disruptions:** the card names affected stations and links each one, so you can find a bus there. Optional notifications when a line near your saved stops is disrupted, and when it's back to normal.
+- **Last bus:** a chip in the 45 minutes before tonight's last bus, on stops and saved buses.
+- **Stops away:** how many stops away the next bus is, on stops, Next up and the tracking notification.
+- **Leave-now alerts:** bus alerts count your walk to the stop.
+- **Frequency:** how often a service runs right now, plus category and loop point on its route.
+- **Widget setup:** show all favourites, one saved stop or one place; rows fill the widget's height.
+- **Shortcuts:** your first saved stops and places on the launcher icon, and any stop pinned to the home screen.
+- **Nearby map:** an optional map with the closest stops numbered as in the list.
+- **Wide screens:** two panes on tablets and unfolded foldables.
+
+### Changed
+
+- Public holidays use the Sunday timetable.
+- Search understands spelled-out words ("station", "opposite", "primary school"), any word order and small typos.
+- Tap a bus number on a stop to open its route. Route stops show first and last buses.
+- Screens stack, so stops and stations can open each other; back goes through them in order.
+
 ## 0.2.0
 
 ### Added
