@@ -40,6 +40,7 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit) {
     vm.stops.collectAsStateWithLifecycle() // recompose once stop names are available
     val codes = remember(favourites) { favourites.map { it.stopCode }.distinct() }
     PollArrivals(vm, codes)
+    PollTrainStatus(vm)
     val now = rememberNow()
 
     fun service(f: Favourite.Service): ServiceArrivals? =
@@ -55,13 +56,17 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit) {
     val latest = codes.mapNotNull { arrivals[it]?.fetchedAt }.maxOrNull()
     val offline = codes.any { arrivals[it]?.error != null }
 
-    RefreshableBox(onRefresh = { vm.refresh(codes, force = true) }, modifier = Modifier.statusBarsPadding()) {
+    RefreshableBox(onRefresh = {
+        vm.refreshTrains()
+        vm.refresh(codes, force = true)
+    }, modifier = Modifier.statusBarsPadding()) {
         LazyColumn(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 140.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item { ScreenTitle("Favourites", trailing = { if (codes.isNotEmpty()) LiveChip(latest, now, offline) }) }
+            item(key = "trains") { TrainStatusCard(vm) }
 
             if (favourites.isEmpty()) {
                 item {

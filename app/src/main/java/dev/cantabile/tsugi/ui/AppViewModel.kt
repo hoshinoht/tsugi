@@ -9,6 +9,7 @@ import dev.cantabile.tsugi.data.BusStop
 import dev.cantabile.tsugi.data.Favourite
 import dev.cantabile.tsugi.data.NearbyStop
 import dev.cantabile.tsugi.data.StopArrivals
+import dev.cantabile.tsugi.data.TrainStatus
 import dev.cantabile.tsugi.data.serviceOrder
 import dev.cantabile.tsugi.data.toDomain
 import kotlinx.coroutines.async
@@ -53,6 +54,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _nearby = MutableStateFlow<NearbyState>(NearbyState.Idle)
     val nearby = _nearby.asStateFlow()
+
+    private val _trainStatus = MutableStateFlow<TrainStatus?>(null)
+    val trainStatus = _trainStatus.asStateFlow()
 
     private val _radiusM = MutableStateFlow(400)
     val radiusM = _radiusM.asStateFlow()
@@ -106,6 +110,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 (previous ?: StopArrivals()).copy(error = e.message ?: "Network error")
             },
         )
+    }
+
+    /** Keeps the last known status if the call fails, so a flaky network doesn't hide a disruption. */
+    suspend fun refreshTrains() {
+        runCatching { c.api.trainServiceAlerts() }.getOrNull()?.let {
+            _trainStatus.value = it.value.toDomain(Instant.now())
+        }
     }
 
     fun toggleFavourite(favourite: Favourite) {

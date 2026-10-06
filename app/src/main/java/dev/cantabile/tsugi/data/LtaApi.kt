@@ -18,6 +18,9 @@ class LtaApi(
     suspend fun busArrival(stopCode: String): BusArrivalResponse? =
         get("v3/BusArrival?BusStopCode=$stopCode")
 
+    /** Line status and disruption alerts for the whole MRT/LRT network. */
+    suspend fun trainServiceAlerts(): TrainAlertsResponse? = get("TrainServiceAlerts")
+
     /** One page of up to 500 stops. */
     suspend fun busStops(skip: Int): List<BusStopDto> =
         get<BusStopsResponse>("BusStops?\$skip=$skip")?.value.orEmpty()
