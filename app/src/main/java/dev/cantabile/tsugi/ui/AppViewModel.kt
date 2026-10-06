@@ -77,9 +77,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun search(query: String): List<BusStop> = c.stops.search(query)
 
-    /** Fetches every stop in parallel; keeps the last good data if a call fails. */
-    suspend fun refresh(codes: Collection<String>) = coroutineScope {
+    /**
+     * Fetches stops in parallel; keeps the last good data if a call fails.
+     * Skips stops fetched in the last few seconds (e.g. when switching screens) unless [force].
+     */
+    suspend fun refresh(codes: Collection<String>, force: Boolean = false) = coroutineScope {
+        val cutoff = Instant.now().minusSeconds(FRESH_SECONDS)
         codes.distinct()
+            .filter { it.isNotBlank() }
+            .filter { force || _arrivals.value[it]?.fetchedAt?.isAfter(cutoff) != true }
             .map { code -> async { code to fetch(code) } }
             .awaitAll()
             .let { results -> _arrivals.update { it + results } }
@@ -132,6 +138,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun setRadius(metres: Int) {
         _radiusM.value = metres
         recomputeNearby()
+    }
+
+    private companion object {
+        const val FRESH_SECONDS = 10L
     }
 
     private fun recomputeNearby() {

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -55,63 +56,71 @@ fun NearbyScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onRequestLocati
         if (state == NearbyState.Idle) onRequestLocation()
     }
     val ready = state as? NearbyState.Ready
-    // Default-expand the closest stop; only the expanded stop is polled.
-    val open = expanded ?: ready?.stops?.firstOrNull()?.stop?.code
+    // null = default to the closest stop; "" = the user collapsed everything. Only the open stop is polled.
+    val open = if (expanded == null) ready?.stops?.firstOrNull()?.stop?.code else expanded?.ifEmpty { null }
     PollArrivals(vm, listOfNotNull(open))
 
-    LazyColumn(
-        Modifier.statusBarsPadding(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 140.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+    RefreshableBox(
+        onRefresh = {
+            vm.locate()
+            open?.let { vm.refresh(listOf(it), force = true) }
+        },
+        modifier = Modifier.statusBarsPadding(),
     ) {
-        item {
-            ScreenTitle(
-                "Nearby",
-                subtitle = ready?.let { "${it.stops.size} stops within $radius m" + if (!it.precise) " · approximate location" else "" },
-            )
-        }
-        item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
-                RADII.forEachIndexed { i, r ->
-                    ToggleButton(
-                        checked = r == radius,
-                        onCheckedChange = { vm.setRadius(r) },
-                        modifier = Modifier.weight(1f).semantics { role = Role.RadioButton },
-                        shapes = when (i) {
-                            0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                            RADII.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                        },
-                    ) { Text("$r m") }
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 140.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            item {
+                ScreenTitle(
+                    "Nearby",
+                    subtitle = ready?.let { "${it.stops.size} stops within $radius m" + if (!it.precise) " · approximate location" else "" },
+                )
+            }
+            item {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+                    RADII.forEachIndexed { i, r ->
+                        ToggleButton(
+                            checked = r == radius,
+                            onCheckedChange = { vm.setRadius(r) },
+                            modifier = Modifier.weight(1f).semantics { role = Role.RadioButton },
+                            shapes = when (i) {
+                                0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                                RADII.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                                else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                            },
+                        ) { Text("$r m") }
+                    }
                 }
             }
-        }
 
-        when (val s = state) {
-            NearbyState.Idle, NearbyState.Locating -> item {
-                Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { ContainedLoadingIndicator() }
-            }
-            NearbyState.NeedsPermission -> item {
-                MessageCard("Allow location to see bus stops around you.") {
-                    Button(onClick = onRequestLocation) { Text("Allow location") }
+            when (val s = state) {
+                NearbyState.Idle, NearbyState.Locating -> item {
+                    Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { ContainedLoadingIndicator() }
                 }
-            }
-            is NearbyState.Failed -> item {
-                MessageCard(s.message) { FilledTonalButton(onClick = onRequestLocation) { Text("Try again") } }
-            }
-            is NearbyState.Ready -> {
-                if (s.stops.isEmpty()) {
-                    item { MessageCard("No bus stops within $radius m. Try a wider radius.") }
+                NearbyState.NeedsPermission -> item {
+                    MessageCard("Allow location to see bus stops around you.") {
+                        Button(onClick = onRequestLocation) { Text("Allow location") }
+                    }
                 }
-                items(s.stops, key = { it.stop.code }) { nearby ->
-                    NearbyStopCard(
-                        nearby = nearby,
-                        isOpen = nearby.stop.code == open,
-                        services = arrivals[nearby.stop.code]?.services,
-                        now = now,
-                        onToggle = { expanded = if (nearby.stop.code == open) "" else nearby.stop.code },
-                        onOpen = { onOpenStop(nearby.stop.code) },
-                    )
+                is NearbyState.Failed -> item {
+                    MessageCard(s.message) { FilledTonalButton(onClick = onRequestLocation) { Text("Try again") } }
+                }
+                is NearbyState.Ready -> {
+                    if (s.stops.isEmpty()) {
+                        item { MessageCard("No bus stops within $radius m. Try a wider radius.") }
+                    }
+                    items(s.stops, key = { it.stop.code }) { nearby ->
+                        NearbyStopCard(
+                            nearby = nearby,
+                            isOpen = nearby.stop.code == open,
+                            services = arrivals[nearby.stop.code]?.services,
+                            now = now,
+                            onToggle = { expanded = if (nearby.stop.code == open) "" else nearby.stop.code },
+                            onOpen = { onOpenStop(nearby.stop.code) },
+                        )
+                    }
                 }
             }
         }

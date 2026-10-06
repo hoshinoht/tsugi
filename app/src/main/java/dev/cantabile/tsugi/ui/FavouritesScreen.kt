@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -52,43 +53,46 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit) {
     val wholeStops = favourites.filterIsInstance<Favourite.Stop>()
     val groups = pinned.filter { it != hero }.groupBy { it.stopCode }
     val latest = codes.mapNotNull { arrivals[it]?.fetchedAt }.maxOrNull()
+    val offline = codes.any { arrivals[it]?.error != null }
 
-    LazyColumn(
-        Modifier.statusBarsPadding(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 140.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item { ScreenTitle("Favourites", trailing = { if (codes.isNotEmpty()) LiveChip(latest, now) }) }
+    RefreshableBox(onRefresh = { vm.refresh(codes, force = true) }, modifier = Modifier.statusBarsPadding()) {
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 140.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item { ScreenTitle("Favourites", trailing = { if (codes.isNotEmpty()) LiveChip(latest, now, offline) }) }
 
-        if (favourites.isEmpty()) {
-            item {
-                MessageCard("Nothing saved yet. Open a stop from Nearby or Search, then tap the star to save the whole stop, or the star on a bus to save just that one.")
+            if (favourites.isEmpty()) {
+                item {
+                    MessageCard("Nothing saved yet. Open a stop from Nearby or Search, then tap the star to save the whole stop, or the star on a bus to save just that one.")
+                }
             }
-        }
 
-        if (hero != null) {
-            item(key = "hero") {
-                HeroCard(vm, hero, service(hero)!!, now, onClick = { onOpenStop(hero.stopCode) })
+            if (hero != null) {
+                item(key = "hero") {
+                    HeroCard(vm, hero, service(hero)!!, now, onClick = { onOpenStop(hero.stopCode) })
+                }
             }
-        }
 
-        items(wholeStops, key = { "stop-${it.stopCode}" }) { fav ->
-            WholeStopCard(vm, fav.stopCode, arrivals[fav.stopCode]?.services.orEmpty(), now, onClick = { onOpenStop(fav.stopCode) })
-        }
+            items(wholeStops, key = { "stop-${it.stopCode}" }) { fav ->
+                WholeStopCard(vm, fav.stopCode, arrivals[fav.stopCode]?.services.orEmpty(), now, onClick = { onOpenStop(fav.stopCode) })
+            }
 
-        groups.forEach { (code, favs) ->
-            item(key = "group-$code") {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val stop = vm.stop(code)
-                    Text(
-                        stop?.description ?: code,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(start = 8.dp, top = 4.dp),
-                    )
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        favs.forEachIndexed { i, f ->
-                            ServiceRow(vm, f.serviceNo, service(f), now, groupShape(i, favs.size), onClick = { onOpenStop(code) })
+            groups.forEach { (code, favs) ->
+                item(key = "group-$code") {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val stop = vm.stop(code)
+                        Text(
+                            stop?.description ?: code,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(start = 8.dp, top = 4.dp),
+                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            favs.forEachIndexed { i, f ->
+                                ServiceRow(vm, f.serviceNo, service(f), now, groupShape(i, favs.size), onClick = { onOpenStop(code) })
+                            }
                         }
                     }
                 }

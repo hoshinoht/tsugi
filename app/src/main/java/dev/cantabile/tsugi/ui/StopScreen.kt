@@ -49,6 +49,7 @@ fun StopScreen(vm: AppViewModel, code: String, onBack: () -> Unit) {
     val stop = vm.stop(code)
     val data = arrivals[code]
     val stopFav = Favourite.Stop(code)
+    val haptic = rememberToggleHaptic()
 
     Scaffold(
         containerColor = colors.surface,
@@ -63,7 +64,10 @@ fun StopScreen(vm: AppViewModel, code: String, onBack: () -> Unit) {
                     val saved = stopFav in favourites
                     FilledIconToggleButton(
                         checked = saved,
-                        onCheckedChange = { vm.toggleFavourite(stopFav) },
+                        onCheckedChange = {
+                            haptic(it)
+                            vm.toggleFavourite(stopFav)
+                        },
                         modifier = Modifier.padding(end = 8.dp),
                     ) {
                         Icon(
@@ -75,41 +79,45 @@ fun StopScreen(vm: AppViewModel, code: String, onBack: () -> Unit) {
             )
         },
     ) { inner ->
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                start = 12.dp,
-                end = 12.dp,
-                top = inner.calculateTopPadding(),
-                bottom = inner.calculateBottomPadding() + 24.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            item {
-                Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(stop?.description ?: code, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        listOfNotNull(stop?.road, code).joinToString(" · "),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = colors.onSurfaceVariant,
-                    )
-                    RefreshProgress(data?.fetchedAt, now)
+        RefreshableBox(onRefresh = { vm.refresh(listOf(code), force = true) }, modifier = Modifier.padding(top = inner.calculateTopPadding())) {
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = 12.dp,
+                    end = 12.dp,
+                    bottom = inner.calculateBottomPadding() + 24.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                item {
+                    Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(stop?.description ?: code, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            listOfNotNull(stop?.road, code).joinToString(" · "),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.onSurfaceVariant,
+                        )
+                        RefreshProgress(data?.fetchedAt, now)
+                    }
                 }
-            }
 
-            when {
-                data?.fetchedAt == null && data?.error != null -> item {
-                    MessageCard("Couldn't load arrivals: ${data.error}")
-                }
-                data == null || data.fetchedAt == null -> item {
-                    Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { LoadingIndicator() }
-                }
-                data.services.isEmpty() -> item {
-                    MessageCard("No buses are running at this stop right now.")
-                }
-                else -> items(data.services, key = { it.serviceNo }) { service ->
-                    val fav = Favourite.Service(code, service.serviceNo)
-                    ServiceCard(vm, service, now, pinned = fav in favourites, onTogglePin = { vm.toggleFavourite(fav) })
+                when {
+                    data?.fetchedAt == null && data?.error != null -> item {
+                        MessageCard("Couldn't load arrivals: ${data.error}")
+                    }
+                    data == null || data.fetchedAt == null -> item {
+                        Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) { LoadingIndicator() }
+                    }
+                    data.services.isEmpty() -> item {
+                        MessageCard("No buses are running at this stop right now.")
+                    }
+                    else -> items(data.services, key = { it.serviceNo }) { service ->
+                        val fav = Favourite.Service(code, service.serviceNo)
+                        ServiceCard(vm, service, now, pinned = fav in favourites, onTogglePin = {
+                            haptic(fav !in favourites)
+                            vm.toggleFavourite(fav)
+                        })
+                    }
                 }
             }
         }

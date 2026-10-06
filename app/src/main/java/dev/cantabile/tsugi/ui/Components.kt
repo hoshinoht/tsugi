@@ -26,7 +26,18 @@ import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -264,24 +275,74 @@ fun ScreenTitle(title: String, modifier: Modifier = Modifier, subtitle: String? 
     }
 }
 
+/** Pull-to-refresh with the M3E loading indicator; [onRefresh] runs until the data is back. */
 @Composable
-fun LiveChip(fetchedAt: Instant?, now: Instant) {
-    val colors = MaterialTheme.colorScheme
-    val label = when {
-        fetchedAt == null -> "Loading"
-        else -> "Live · ${Duration.between(fetchedAt, now).seconds.coerceAtLeast(0)}s ago"
+fun RefreshableBox(onRefresh: suspend () -> Unit, modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
+    val scope = rememberCoroutineScope()
+    val state = rememberPullToRefreshState()
+    var refreshing by remember { mutableStateOf(false) }
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = {
+            scope.launch {
+                refreshing = true
+                try {
+                    onRefresh()
+                } finally {
+                    refreshing = false
+                }
+            }
+        },
+        modifier = modifier,
+        state = state,
+        indicator = {
+            PullToRefreshDefaults.LoadingIndicator(
+                state = state,
+                isRefreshing = refreshing,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        },
+        content = content,
+    )
+}
+
+/** Haptic tick for toggles like starring a stop. */
+@Composable
+fun rememberToggleHaptic(): (Boolean) -> Unit {
+    val haptics = LocalHapticFeedback.current
+    return remember(haptics) {
+        { on -> haptics.performHapticFeedback(if (on) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff) }
     }
-    Surface(shape = RoundedCornerShape(16.dp), color = colors.surfaceContainerHigh) {
+}
+
+@Composable
+fun LiveChip(fetchedAt: Instant?, now: Instant, offline: Boolean = false) {
+    val colors = MaterialTheme.colorScheme
+    val age = fetchedAt?.let { Duration.between(it, now).seconds.coerceAtLeast(0) }
+    val label = when {
+        age == null && offline -> "Offline"
+        age == null -> "Loading"
+        offline -> "Offline · ${formatAge(age)} old"
+        else -> "Live · ${formatAge(age)} ago"
+    }
+    Surface(shape = RoundedCornerShape(16.dp), color = if (offline) colors.errorContainer else colors.surfaceContainerHigh) {
         Row(
             Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Box(Modifier.size(8.dp).background(if (fetchedAt != null) colors.primary else colors.outline, RoundedCornerShape(4.dp)))
-            Text(label, style = MaterialTheme.typography.labelLarge, color = colors.onSurfaceVariant)
+            val dot = when {
+                offline -> colors.error
+                fetchedAt != null -> colors.primary
+                else -> colors.outline
+            }
+            Box(Modifier.size(8.dp).background(dot, RoundedCornerShape(4.dp)))
+            Text(label, style = MaterialTheme.typography.labelLarge, color = if (offline) colors.onErrorContainer else colors.onSurfaceVariant)
         }
     }
 }
+
+fun formatAge(seconds: Long): String = if (seconds < 60) "${seconds}s" else "${seconds / 60}m"
 
 @Composable
 fun MessageCard(text: String, modifier: Modifier = Modifier, action: (@Composable () -> Unit)? = null) {
