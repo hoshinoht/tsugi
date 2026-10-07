@@ -34,7 +34,10 @@ fun pickNextUp(
 ): NextUp? {
     val options = candidates.mapNotNull { c ->
         val distance = here?.let { h -> stopLatLng(c.stopCode)?.let { s -> distanceM(h.first, h.second, s.first, s.second) } }
-        val walk = Duration.ofSeconds((distance ?: 0) * 60L / WALK_M_PER_MIN)
+        // Only stops you could walk to count the walk; from further away (e.g. across town) any
+        // upcoming bus is fair game, otherwise every bus looks uncatchable.
+        val walkable = distance?.takeIf { it <= NEAR_STOP_M } ?: 0
+        val walk = Duration.ofSeconds(walkable * 60L / WALK_M_PER_MIN)
         val bus = c.service.buses.firstOrNull { !it.eta.isBefore(now.plus(walk)) } ?: return@mapNotNull null
         Triple(c, bus, distance)
     }

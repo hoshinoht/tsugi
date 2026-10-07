@@ -38,6 +38,7 @@
 - Pinned shortcuts to a deleted place are disabled.
 - Only 5-digit stop codes are sent to LTA, and the widget's clock uses Singapore time.
 - "1 stop within 200 m", not "1 stops".
+- Away from your saved stops, Next up showed "No buses running" in the middle of the day: the walking-time check applied to stops kilometres away, so every bus looked uncatchable. Only stops within 400 m count the walk now, and the overnight card only shows when no saved bus is running at all.
 
 ## 0.2.0
 

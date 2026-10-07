@@ -164,7 +164,8 @@ fun FavouritesScreen(
             }
 
             // Overnight nothing is running: show when the first saved bus starts instead of a gap.
-            val firstBus = if (hero == null) {
+            // Only when none of your saved buses is running, not merely when none is catchable.
+            val firstBus = if (hero == null && candidates.none { it.service.buses.isNotEmpty() }) {
                 candidates.mapNotNull { c -> c.service.firstBus?.let { label -> labelMinutes(label)?.let { Triple(it, label, c) } } }
                     .minByOrNull { it.first }
             } else null

@@ -202,6 +202,14 @@ class NextUpTest {
     }
 
     @Test
+    fun fromAcrossTownTheWalkDoesntRuleBusesOut() {
+        // ~1.1 km to stop B and no saved stop nearby: B's buses are still candidates, soonest first.
+        val pick = pickNextUp(listOf(NextUpCandidate("B", svc("10", 3, 12), pinned = true)), stops::get, here, now)
+        assertEquals(now.plusSeconds(3 * 60), pick!!.bus.eta)
+        assertNull(pick.distanceM)
+    }
+
+    @Test
     fun withoutLocationFallsBackToSoonest() {
         val pick = pickNextUp(
             listOf(NextUpCandidate("B", svc("10", 3), pinned = true), NextUpCandidate("A", svc("20", 6), pinned = true)),
