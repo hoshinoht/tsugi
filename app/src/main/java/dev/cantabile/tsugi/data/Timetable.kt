@@ -85,7 +85,7 @@ fun withTimetable(
     fun complete(s: ServiceArrivals): ServiceArrivals {
         val route = routeOf[s.serviceNo]?.firstOrNull() ?: return s
         return s.copy(
-            firstBus = s.firstBus ?: route.firstBusLabel(now).takeIf { s.buses.isEmpty() },
+            firstBus = s.firstBus ?: route.nextFirstBusLabel(now).takeIf { s.buses.isEmpty() },
             lastBus = route.lastBusAt(now)?.toInstant(),
             frequency = info?.get(s.serviceNo, route.direction)?.frequencyAt(now.toLocalTime(), dayType(now.toLocalDate())),
         )

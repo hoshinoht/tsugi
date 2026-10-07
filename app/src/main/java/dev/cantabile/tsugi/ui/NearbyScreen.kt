@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.cantabile.tsugi.R
+import dev.cantabile.tsugi.data.compactFirstBus
 import dev.cantabile.tsugi.data.NEARBY_RADII
 import dev.cantabile.tsugi.data.NearbyStop
 import java.time.Instant
@@ -222,7 +223,7 @@ private fun NearbyStopCard(
                                         Text(s.serviceNo, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                         Text(
                                             when {
-                                                first == null -> s.firstBus ?: "Not running"
+                                                first == null -> s.firstBus?.let(::compactFirstBus) ?: "Not running"
                                                 arriving -> "Arriving"
                                                 else -> "${minutesUntil(first.eta, now)} min"
                                             },

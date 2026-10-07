@@ -78,6 +78,26 @@ class RoutesIndex(rows: List<RouteStop>) {
 fun RouteStop.firstBusLabel(now: ZonedDateTime = ZonedDateTime.now(SINGAPORE)): String? =
     times(dayType(now.toLocalDate())).getOrNull(0)?.let(::hhmmLabel)
 
+/**
+ * The next scheduled first bus at this stop: today's if it's still to come, otherwise tomorrow's
+ * ("tomorrow 6:30 am"). For a service that isn't running now; null if neither day has one.
+ * LTA only publishes first and last times, so a mid-day gap (e.g. a peak-only express between its
+ * morning and evening runs) shows tomorrow's first bus.
+ */
+fun RouteStop.nextFirstBusLabel(now: ZonedDateTime = ZonedDateTime.now(SINGAPORE)): String? {
+    val today = now.toLocalDate()
+    times(dayType(today)).getOrNull(0)?.let(::parseHhmm)
+        ?.takeIf { now.toLocalTime().isBefore(it) }
+        ?.let { return timeLabel(it) }
+    return times(dayType(today.plusDays(1))).getOrNull(0)?.let(::parseHhmm)?.let { "$TOMORROW${timeLabel(it)}" }
+}
+
+const val TOMORROW = "tomorrow "
+
+/** For narrow tiles: "tomorrow 6:30 am" → "Tmr 6:30", "5:19 pm" → "5:19 pm". */
+fun compactFirstBus(label: String): String =
+    if (label.startsWith(TOMORROW)) "Tmr " + label.removePrefix(TOMORROW).substringBefore(' ') else label
+
 /** Today's scheduled last bus at [stop], e.g. "11:42 pm". */
 fun RouteStop.lastBusLabel(now: ZonedDateTime = ZonedDateTime.now(SINGAPORE)): String? =
     lastBusAt(now)?.toLocalTime()?.let(::timeLabel)
@@ -93,6 +113,8 @@ fun timeLabel(time: LocalTime): String {
 
 /** "5:29 am" → minutes after midnight, for comparing first-bus times; null if unparseable. */
 fun labelMinutes(label: String): Int? {
+    // "tomorrow 5:29 am" sorts after every time today.
+    if (label.startsWith(TOMORROW)) return labelMinutes(label.removePrefix(TOMORROW))?.plus(24 * 60)
     val m = Regex("""^(\d{1,2}):(\d{2}) (am|pm)$""").matchEntire(label) ?: return null
     val (h, min, half) = m.destructured
     return (h.toInt() % 12 + if (half == "pm") 12 else 0) * 60 + min.toInt()

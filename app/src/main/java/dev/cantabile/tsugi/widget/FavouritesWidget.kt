@@ -52,7 +52,7 @@ import dev.cantabile.tsugi.TsugiApplication
 import dev.cantabile.tsugi.data.Favourite
 import dev.cantabile.tsugi.data.SINGAPORE
 import dev.cantabile.tsugi.data.ServiceArrivals
-import dev.cantabile.tsugi.data.firstBusLabel
+import dev.cantabile.tsugi.data.nextFirstBusLabel
 import dev.cantabile.tsugi.data.labelMinutes
 import dev.cantabile.tsugi.data.toDomain
 import kotlinx.coroutines.async
@@ -176,7 +176,7 @@ class FavouritesWidget : GlanceAppWidget() {
             val wholeCodes = favourites.filterNot { it is Favourite.Service }.flatMap { if (it is Favourite.Place) it.stopCodes else listOf(it.stopCode) }.toSet()
             routes?.byStop?.filterKeys { it in codes }?.flatMap { (code, stops) ->
                 stops.filter { (code to it.service) in pinnedPairs || code in wholeCodes }
-                    .mapNotNull { r -> r.firstBusLabel()?.let { label -> labelMinutes(label)?.let { Triple(it, label, r.service) } } }
+                    .mapNotNull { r -> r.nextFirstBusLabel()?.let { label -> labelMinutes(label)?.let { Triple(it, label, r.service) } } }
             }?.minByOrNull { it.first }?.let { (_, label, service) -> "No buses running · first bus $label ($service)" }
         } else null
         val updated = DateTimeFormatter.ofPattern("H:mm").withZone(SINGAPORE).format(now)

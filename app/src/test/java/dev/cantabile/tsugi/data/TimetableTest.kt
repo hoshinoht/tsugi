@@ -87,3 +87,27 @@ class TimetableTest {
         assertNull(categoryLabel(" "))
     }
 }
+
+class NextFirstBusTest {
+    // A peak-only express: 8:42 am on weekdays, no weekend service.
+    private val express = RouteStop("14e", "SBST", 1, 5, "09023", listOf("0842", "0915"), listOf("-", "-"), listOf("-", "-"))
+    private fun at(s: String) = java.time.ZonedDateTime.parse("${s}+08:00[Asia/Singapore]")
+
+    @Test
+    fun todaysFirstBusWhileItIsStillToCome() {
+        assertEquals("8:42 am", express.nextFirstBusLabel(at("2026-10-07T07:30:00"))) // Wednesday
+    }
+
+    @Test
+    fun tomorrowsOnceTodaysHasGone() {
+        assertEquals("tomorrow 8:42 am", express.nextFirstBusLabel(at("2026-10-07T08:50:00")))
+        assertEquals("Tmr 8:42", compactFirstBus("tomorrow 8:42 am"))
+        // Friday evening: no Saturday service, so nothing to show.
+        org.junit.Assert.assertNull(express.nextFirstBusLabel(at("2026-10-09T09:00:00")))
+    }
+
+    @Test
+    fun tomorrowSortsAfterToday() {
+        assertEquals(24 * 60 + 8 * 60 + 42, labelMinutes("tomorrow 8:42 am"))
+    }
+}
