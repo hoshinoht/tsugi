@@ -202,6 +202,43 @@ class NextUpTest {
     }
 
     @Test
+    fun staysWithThePreviousPickWhenAnotherIsOnlySlightlySooner() {
+        // Like 39 and 12 both about a minute away: the estimates swap order between refreshes.
+        val both = listOf(NextUpCandidate("B", svc("39", 2), pinned = true), NextUpCandidate("B", svc("12", 1), pinned = true))
+        assertEquals("12", pickNextUp(both, stops::get, null, now)!!.service.serviceNo)
+        assertEquals("39", pickNextUp(both, stops::get, null, now, previous = "B" to "39")!!.service.serviceNo)
+    }
+
+    @Test
+    fun ranksUpToThreeDistinctBusesWithTheStickyPickFirst() {
+        val all = listOf(
+            NextUpCandidate("B", svc("39", 2), pinned = true),
+            NextUpCandidate("B", svc("12", 1), pinned = true),
+            NextUpCandidate("B", svc("81", 5), pinned = true),
+            NextUpCandidate("B", svc("109", 7), pinned = true),
+            NextUpCandidate("B", svc("12", 1), pinned = false), // same bus via a whole-stop favourite
+        )
+        val ranked = rankNextUp(all, stops::get, null, now, previous = "B" to "39")
+        assertEquals(listOf("39", "12", "81"), ranked.map { it.service.serviceNo })
+    }
+
+    @Test
+    fun switchesWhenAnotherIsClearlySoonerOrThePreviousIsGone() {
+        val later = listOf(NextUpCandidate("B", svc("39", 9), pinned = true), NextUpCandidate("B", svc("12", 1), pinned = true))
+        assertEquals("12", pickNextUp(later, stops::get, null, now, previous = "B" to "39")!!.service.serviceNo)
+        val gone = listOf(NextUpCandidate("B", svc("12", 1), pinned = true))
+        assertEquals("12", pickNextUp(gone, stops::get, null, now, previous = "B" to "39")!!.service.serviceNo)
+    }
+
+    @Test
+    fun fromAcrossTownTheWalkDoesntRuleBusesOut() {
+        // ~1.1 km to stop B and no saved stop nearby: B's buses are still candidates, soonest first.
+        val pick = pickNextUp(listOf(NextUpCandidate("B", svc("10", 3, 12), pinned = true)), stops::get, here, now)
+        assertEquals(now.plusSeconds(3 * 60), pick!!.bus.eta)
+        assertNull(pick.distanceM)
+    }
+
+    @Test
     fun withoutLocationFallsBackToSoonest() {
         val pick = pickNextUp(
             listOf(NextUpCandidate("B", svc("10", 3), pinned = true), NextUpCandidate("A", svc("20", 6), pinned = true)),

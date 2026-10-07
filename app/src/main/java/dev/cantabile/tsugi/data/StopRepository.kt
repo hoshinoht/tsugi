@@ -56,27 +56,8 @@ class StopRepository(
             .take(limit)
             .toList()
 
-    fun search(query: String, limit: Int = 50): List<BusStop> {
-        val q = query.trim().lowercase()
-        if (q.isEmpty()) return emptyList()
-        return _stops.value.asSequence()
-            .mapNotNull { stop ->
-                val name = stop.description.lowercase()
-                val rank = when {
-                    stop.code == q -> 0
-                    stop.code.startsWith(q) -> 1
-                    name.startsWith(q) -> 2
-                    name.contains(q) -> 3
-                    stop.road.lowercase().contains(q) -> 4
-                    else -> return@mapNotNull null
-                }
-                rank to stop
-            }
-            .sortedWith(compareBy({ it.first }, { it.second.description }))
-            .take(limit)
-            .map { it.second }
-            .toList()
-    }
+    /** See [searchStops]. */
+    fun search(query: String, limit: Int = 50): List<BusStop> = searchStops(_stops.value, query, limit)
 
     private fun publish(list: List<BusStop>) {
         byCode = list.associateBy { it.code }

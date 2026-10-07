@@ -44,6 +44,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.cantabile.tsugi.R
+import dev.cantabile.tsugi.data.compactFirstBus
+import dev.cantabile.tsugi.data.TOMORROW
 import dev.cantabile.tsugi.data.Favourite
 import dev.cantabile.tsugi.data.ServiceArrivals
 import dev.cantabile.tsugi.data.StopArrivals
@@ -199,7 +201,7 @@ fun MiniTile(service: ServiceArrivals, now: Instant, modifier: Modifier = Modifi
         )
         RollingText(
             first?.let { if (arriving) "Arr" else "${minutesUntil(it.eta, now)}m" }
-                ?: service.firstBus?.substringBefore(' ')
+                ?: service.firstBus?.let { compactFirstBus(it).substringBefore(' ').let { t -> if (it.startsWith(TOMORROW)) "Tmr" else t } }
                 ?: "—",
             color = fg,
             style = MaterialTheme.typography.labelMedium,

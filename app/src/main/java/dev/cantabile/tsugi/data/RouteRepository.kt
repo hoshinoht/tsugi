@@ -15,7 +15,6 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
-import java.time.DayOfWeek
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -75,29 +74,47 @@ class RoutesIndex(rows: List<RouteStop>) {
     fun servicesAt(stop: String): List<String> = byStop[stop].orEmpty().map { it.service }.distinct()
 }
 
+/** The scheduled first bus for [stop] on today's timetable, e.g. "6:53 am"; public holidays run Sunday's. */
+fun RouteStop.firstBusLabel(now: ZonedDateTime = ZonedDateTime.now(SINGAPORE)): String? =
+    times(dayType(now.toLocalDate())).getOrNull(0)?.let(::hhmmLabel)
+
 /**
- * The scheduled first bus for [stop] on today's timetable (weekday, Saturday or Sunday),
- * e.g. "6:53 am". Public holidays use the Sunday timetable in reality; we don't track them.
+ * The next scheduled first bus at this stop: today's if it's still to come, otherwise tomorrow's
+ * ("tomorrow 6:30 am"). For a service that isn't running now; null if neither day has one.
+ * LTA only publishes first and last times, so a mid-day gap (e.g. a peak-only express between its
+ * morning and evening runs) shows tomorrow's first bus.
  */
-fun RouteStop.firstBusLabel(now: ZonedDateTime = ZonedDateTime.now(SINGAPORE)): String? {
-    val times = when (now.dayOfWeek) {
-        DayOfWeek.SATURDAY -> sat
-        DayOfWeek.SUNDAY -> sun
-        else -> wd
-    }
-    return times.getOrNull(0)?.let(::hhmmLabel)
+fun RouteStop.nextFirstBusLabel(now: ZonedDateTime = ZonedDateTime.now(SINGAPORE)): String? {
+    val today = now.toLocalDate()
+    times(dayType(today)).getOrNull(0)?.let(::parseHhmm)
+        ?.takeIf { now.toLocalTime().isBefore(it) }
+        ?.let { return timeLabel(it) }
+    return times(dayType(today.plusDays(1))).getOrNull(0)?.let(::parseHhmm)?.let { "$TOMORROW${timeLabel(it)}" }
 }
 
+const val TOMORROW = "tomorrow "
+
+/** For narrow tiles: "tomorrow 6:30 am" → "Tmr 6:30", "5:19 pm" → "5:19 pm". */
+fun compactFirstBus(label: String): String =
+    if (label.startsWith(TOMORROW)) "Tmr " + label.removePrefix(TOMORROW).substringBefore(' ') else label
+
+/** Today's scheduled last bus at [stop], e.g. "11:42 pm". */
+fun RouteStop.lastBusLabel(now: ZonedDateTime = ZonedDateTime.now(SINGAPORE)): String? =
+    lastBusAt(now)?.toLocalTime()?.let(::timeLabel)
+
 /** "0653" → "6:53 am"; anything that isn't four digits → null. */
-fun hhmmLabel(hhmm: String): String? {
-    if (hhmm.length != 4 || !hhmm.all(Char::isDigit)) return null
-    val time = LocalTime.of(hhmm.take(2).toInt() % 24, hhmm.takeLast(2).toInt())
+fun hhmmLabel(hhmm: String): String? = parseHhmm(hhmm)?.let(::timeLabel)
+
+/** 18:05 → "6:05 pm". */
+fun timeLabel(time: LocalTime): String {
     val hour = if (time.hour % 12 == 0) 12 else time.hour % 12
     return "%d:%02d %s".format(hour, time.minute, if (time.hour < 12) "am" else "pm")
 }
 
 /** "5:29 am" → minutes after midnight, for comparing first-bus times; null if unparseable. */
 fun labelMinutes(label: String): Int? {
+    // "tomorrow 5:29 am" sorts after every time today.
+    if (label.startsWith(TOMORROW)) return labelMinutes(label.removePrefix(TOMORROW))?.plus(24 * 60)
     val m = Regex("""^(\d{1,2}):(\d{2}) (am|pm)$""").matchEntire(label) ?: return null
     val (h, min, half) = m.destructured
     return (h.toInt() % 12 + if (half == "pm") 12 else 0) * 60 + min.toInt()
@@ -133,6 +150,19 @@ class RouteRepository(
                     withContext(Dispatchers.IO) { file.writeText(json.encodeToString(fresh)) }
                 }
                 .onFailure { if (cached == null) throw it }
+        }
+    }
+
+    /**
+     * Re-downloads the route data if the cached copy predates [changedOn] (a planned route change
+     * for one of your services), so stop lists and "stops away" follow the new route.
+     */
+    suspend fun refreshIfOlderThan(changedOn: java.time.LocalDate) = mutex.withLock {
+        val cachedOn = java.time.Instant.ofEpochMilli(file.lastModified()).atZone(SINGAPORE).toLocalDate()
+        if (file.exists() && !cachedOn.isBefore(changedOn)) return@withLock
+        runCatching { download() }.onSuccess { fresh ->
+            _index.value = RoutesIndex(fresh)
+            withContext(Dispatchers.IO) { file.writeText(json.encodeToString(fresh)) }
         }
     }
 

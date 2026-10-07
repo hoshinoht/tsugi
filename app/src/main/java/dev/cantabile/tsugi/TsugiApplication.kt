@@ -8,7 +8,9 @@ import dev.cantabile.tsugi.data.LocationProvider
 import dev.cantabile.tsugi.data.LtaApi
 import dev.cantabile.tsugi.data.OneMapApi
 import dev.cantabile.tsugi.data.RouteRepository
+import dev.cantabile.tsugi.data.ServiceInfoRepository
 import dev.cantabile.tsugi.data.SettingsRepository
+import dev.cantabile.tsugi.data.StationRepository
 import dev.cantabile.tsugi.data.StopRepository
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -34,6 +36,8 @@ class AppContainer(context: Context) {
     val oneMap = OneMapApi(http, json)
     val stops = StopRepository(context.filesDir, api, json)
     val routes = RouteRepository(context.filesDir, api, json)
+    val serviceInfo = ServiceInfoRepository(context.filesDir, api, json)
+    val stations = StationRepository({ context.assets.open("stations.json").bufferedReader().use { it.readText() } }, json)
     val favourites = FavouritesRepository(context.dataStore, json)
     val settings = SettingsRepository(context, context.dataStore)
     val location = LocationProvider(context)

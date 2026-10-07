@@ -8,7 +8,10 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import dev.cantabile.tsugi.TsugiApplication
+import dev.cantabile.tsugi.data.approachAlert
+import dev.cantabile.tsugi.data.stopsAway
 import dev.cantabile.tsugi.data.toDomain
+import dev.cantabile.tsugi.data.walkMinutes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -52,6 +55,7 @@ class BusTrackingService : Service() {
                     return START_NOT_STICKY
                 }
                 val target = Tracked(stop, service)
+                val walkM = intent.getIntExtra(EXTRA_WALK_M, -1).takeIf { it >= 0 }
                 TrackingNotifications.ensureChannels(this)
                 val first = TrackingNotifications.ongoing(this, target, null)
                 // The special-use type exists from Android 14; earlier versions take no type.
@@ -62,16 +66,17 @@ class BusTrackingService : Service() {
                 }
                 _tracked.value = target
                 job?.cancel()
-                job = scope.launch { track(target) }
+                job = scope.launch { track(target, walkMinutes(walkM)) }
             }
         }
         // If the system kills us, don't restart: stale tracking is worse than none.
         return START_NOT_STICKY
     }
 
-    private suspend fun track(target: Tracked) {
+    private suspend fun track(target: Tracked, walk: Int) {
         val c = (application as TsugiApplication).container
         runCatching { c.stops.ensureLoaded() }
+        runCatching { c.routes.ensureLoaded() }
         val stopName = c.stops[target.stopCode]?.description ?: target.stopCode
         val approachMinutes = c.settings.alertMinutes.first().toLong()
         val started = Instant.now()
@@ -109,6 +114,9 @@ class BusTrackingService : Service() {
                 stopName = stopName,
                 loadLabel = bus.load.label,
                 nextMinutes = service.buses.getOrNull(1)?.let { Duration.between(now, it.eta).toMinutes() },
+                stopsAway = c.routes.index.value?.stopsAway(target.stopCode, target.serviceNo, bus) { code ->
+                    c.stops[code]?.let { it.lat to it.lng }
+                },
             )
             TrackingNotifications.ensureChannels(this)
             getSystemService(NotificationManager::class.java)
@@ -118,14 +126,17 @@ class BusTrackingService : Service() {
                 TrackingNotifications.alert(this, target, "${target.serviceNo} is arriving", "At $stopName${state.destination?.let { " · to $it" } ?: ""}")
                 arrivingAt = now
                 approachSent = true
-            } else if (!approachSent && minutes <= approachMinutes) {
-                TrackingNotifications.alert(this, target, "${target.serviceNo} in $minutes min", "Head to $stopName now")
-                approachSent = true
+            } else if (!approachSent) {
+                approachAlert(target.serviceNo, stopName, minutes, walk, approachMinutes, state.nextMinutes)?.let {
+                    TrackingNotifications.alert(this, target, it.title, it.text)
+                    approachSent = true
+                }
             }
             // Give the arriving bus a couple of minutes, then stop.
             if (arrivingAt != null && Duration.between(arrivingAt, now) > Duration.ofMinutes(2)) break
 
-            delay(if (minutes > 10) 60_000 else 20_000)
+            // Poll slowly while the bus is far off, and every 20 s once an alert could be near.
+            delay(if (minutes > maxOf(10, approachMinutes + walk + 2)) 60_000 else 20_000)
         }
         finish()
     }
@@ -147,6 +158,7 @@ class BusTrackingService : Service() {
         const val ACTION_STOP = "dev.cantabile.tsugi.action.STOP_TRACKING"
         private const val EXTRA_STOP = "stop"
         private const val EXTRA_SERVICE = "service"
+        private const val EXTRA_WALK_M = "walk_m"
         private val MAX_TRACKING: Duration = Duration.ofMinutes(90)
         private val NO_BUS_GIVE_UP: Duration = Duration.ofMinutes(10)
 
@@ -154,12 +166,14 @@ class BusTrackingService : Service() {
         /** The bus being tracked right now, if any (process-wide, for the UI's bell state). */
         val tracked: StateFlow<Tracked?> = _tracked.asStateFlow()
 
-        fun start(context: Context, stopCode: String, serviceNo: String) {
+        /** [walkMetres] from you to the stop, if known, moves the approaching alert earlier by the walk. */
+        fun start(context: Context, stopCode: String, serviceNo: String, walkMetres: Int? = null) {
             context.startForegroundService(
                 Intent(context, BusTrackingService::class.java)
                     .setAction(ACTION_START)
                     .putExtra(EXTRA_STOP, stopCode)
-                    .putExtra(EXTRA_SERVICE, serviceNo),
+                    .putExtra(EXTRA_SERVICE, serviceNo)
+                    .putExtra(EXTRA_WALK_M, walkMetres ?: -1),
             )
         }
 

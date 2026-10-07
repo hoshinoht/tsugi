@@ -2,6 +2,10 @@ package dev.cantabile.tsugi.ui
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -14,7 +18,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonGroupDefaults
@@ -42,17 +45,25 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.cantabile.tsugi.R
+import dev.cantabile.tsugi.data.compactFirstBus
 import dev.cantabile.tsugi.data.NEARBY_RADII
 import dev.cantabile.tsugi.data.NearbyStop
 import java.time.Instant
 
 
 @Composable
-fun NearbyScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onRequestLocation: () -> Unit, onOpenSettings: () -> Unit) {
+fun NearbyScreen(
+    vm: AppViewModel,
+    onOpenStop: (String) -> Unit,
+    onRequestLocation: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenStation: (String) -> Unit = {},
+) {
     val state by vm.nearby.collectAsStateWithLifecycle()
     val radius by vm.radiusM.collectAsStateWithLifecycle()
     val arrivals by vm.arrivals.collectAsStateWithLifecycle()
     var expanded by rememberSaveable { mutableStateOf<String?>(null) }
+    var showMap by rememberSaveable { mutableStateOf(false) }
     val now = rememberNow()
 
     LaunchedEffect(Unit) {
@@ -81,8 +92,9 @@ fun NearbyScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onRequestLocati
                     subtitle = ready?.let {
                         listOfNotNull(
                             it.label?.let { l -> "Near $l" },
-                            "${it.stops.size} stops within $radius m",
+                            "${it.stops.size} stop${if (it.stops.size == 1) "" else "s"} within $radius m",
                             "approximate location".takeIf { _ -> !it.precise },
+                            "updating location…".takeIf { _ -> it.refining },
                         ).joinToString(" · ")
                     },
                     trailing = { SettingsButton(onOpenSettings) },
@@ -103,12 +115,32 @@ fun NearbyScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onRequestLocati
                     MessageCard(s.message) { FilledTonalButton(onClick = onRequestLocation) { Text("Try again") } }
                 }
                 is NearbyState.Ready -> {
+                    if (s.center != null && s.stops.isNotEmpty()) {
+                        item(key = "map") {
+                            if (showMap) {
+                                NearbyMap(vm, s.center, s.stops, s.stations, radius, isYou = s.label == null)
+                            } else {
+                                TextButton(onClick = { showMap = true }) {
+                                    Icon(painterResource(R.drawable.ic_place), null, Modifier.padding(end = 6.dp))
+                                    Text("Show map")
+                                }
+                            }
+                        }
+                    }
+                    if (s.stations.isNotEmpty()) {
+                        item(key = "stations") {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                s.stations.forEach { near -> StationChip(near.station, near.distanceM) { onOpenStation(near.station.codes.first()) } }
+                            }
+                        }
+                    }
                     if (s.stops.isEmpty()) {
                         item { MessageCard("No bus stops within $radius m. Try a wider radius.") }
                     }
-                    items(s.stops, key = { it.stop.code }) { nearby ->
+                    itemsIndexed(s.stops, key = { _, it -> it.stop.code }) { i, nearby ->
                         NearbyStopCard(
                             nearby = nearby,
+                            number = if (showMap && i < NEARBY_MAP_PINS) i + 1 else null,
                             isOpen = nearby.stop.code == open,
                             services = arrivals[nearby.stop.code]?.services,
                             now = now,
@@ -126,6 +158,7 @@ fun NearbyScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onRequestLocati
 @Composable
 private fun NearbyStopCard(
     nearby: NearbyStop,
+    number: Int?,
     isOpen: Boolean,
     services: List<dev.cantabile.tsugi.data.ServiceArrivals>?,
     now: Instant,
@@ -142,6 +175,11 @@ private fun NearbyStopCard(
     ) {
         Column(Modifier.padding(start = 18.dp, end = 14.dp, top = 14.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (number != null) {
+                    Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFFDC2828), contentColor = Color.White) {
+                        Text("$number", Modifier.padding(horizontal = 8.dp, vertical = 2.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                    }
+                }
                 Column(Modifier.weight(1f)) {
                     Text(
                         nearby.stop.description,
@@ -185,7 +223,7 @@ private fun NearbyStopCard(
                                         Text(s.serviceNo, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                         Text(
                                             when {
-                                                first == null -> s.firstBus ?: "Not running"
+                                                first == null -> s.firstBus?.let(::compactFirstBus) ?: "Not running"
                                                 arriving -> "Arriving"
                                                 else -> "${minutesUntil(first.eta, now)} min"
                                             },
@@ -208,3 +246,4 @@ private fun NearbyStopCard(
         }
     }
 }
+

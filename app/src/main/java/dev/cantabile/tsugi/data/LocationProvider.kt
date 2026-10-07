@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
 import android.os.CancellationSignal
+import android.os.SystemClock
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
@@ -23,6 +24,16 @@ class LocationProvider(private val context: Context) {
     fun hasPreciseLocation(): Boolean =
         context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
             PackageManager.PERMISSION_GRANTED
+
+    /** The freshest fix any provider already has: instant, but possibly minutes old. */
+    @SuppressLint("MissingPermission")
+    fun lastKnown(): Location? {
+        if (!hasPermission()) return null
+        return listOf(LocationManager.FUSED_PROVIDER, LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+            .filter(manager::hasProvider)
+            .mapNotNull { runCatching { manager.getLastKnownLocation(it) }.getOrNull() }
+            .maxByOrNull { it.elapsedRealtimeNanos }
+    }
 
     @SuppressLint("MissingPermission")
     suspend fun current(): Location? {
@@ -42,3 +53,6 @@ class LocationProvider(private val context: Context) {
         return fresh ?: manager.getLastKnownLocation(provider)
     }
 }
+
+/** How old [location] is, in milliseconds. */
+fun ageMillis(location: Location): Long = (SystemClock.elapsedRealtimeNanos() - location.elapsedRealtimeNanos) / 1_000_000

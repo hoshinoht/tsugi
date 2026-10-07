@@ -7,6 +7,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.size
@@ -42,6 +45,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -57,18 +61,25 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.cantabile.tsugi.R
+import dev.cantabile.tsugi.data.stopsAwayLabel
 import dev.cantabile.tsugi.data.Favourite
 import dev.cantabile.tsugi.tracking.Tracked
 import dev.cantabile.tsugi.data.NextUp
 import dev.cantabile.tsugi.data.NextUpCandidate
 import dev.cantabile.tsugi.data.labelMinutes
-import dev.cantabile.tsugi.data.pickNextUp
+import dev.cantabile.tsugi.data.rankNextUp
 import dev.cantabile.tsugi.data.allStopCodes
 import dev.cantabile.tsugi.data.ServiceArrivals
 import java.time.Instant
 
 @Composable
-fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace: (String) -> Unit, onOpenSettings: () -> Unit) {
+fun FavouritesScreen(
+    vm: AppViewModel,
+    onOpenStop: (String) -> Unit,
+    onOpenPlace: (String) -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenStation: (String) -> Unit = {},
+) {
     val favourites by vm.favourites.collectAsStateWithLifecycle()
     val loaded by vm.favouritesLoaded.collectAsStateWithLifecycle()
     val here by vm.here.collectAsStateWithLifecycle()
@@ -96,12 +107,18 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace
             arrivals[code]?.services.orEmpty().forEach { add(NextUpCandidate(code, it, pinned = false)) }
         }
     }
-    val hero = pickNextUp(
+    // The last Next up, so it doesn't flip between buses due within a minute of each other.
+    var lastHero by remember { mutableStateOf<Pair<String, String>?>(null) }
+    // Up to three buses to swipe through; the first is the sticky Next up.
+    val nextUps = rankNextUp(
         candidates,
         stopLatLng = { code -> vm.stop(code)?.let { it.lat to it.lng } },
         here = here?.let { it.latitude to it.longitude },
         now = now,
+        previous = lastHero,
     )
+    val hero = nextUps.firstOrNull()
+    SideEffect { lastHero = hero?.let { it.stopCode to it.service.serviceNo } }
     // Don't repeat the hero's bus in its stop's pinned group.
     val groups = pinned.filterNot { hero != null && it.stopCode == hero.stopCode && it.serviceNo == hero.service.serviceNo }.groupBy { it.stopCode }
     // Cards in the user's saved order; new cards go after, in the default order.
@@ -117,7 +134,7 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace
     val ordered = cards.sortedBy { c -> order.indexOf(c.id).let { if (it < 0) Int.MAX_VALUE else it } }
     val currentIds by rememberUpdatedState(ordered.map { it.id })
     val haptic = rememberToggleHaptic()
-    val tracking = rememberTrackingControl()
+    val tracking = rememberTrackingControl(walkMetres = vm::walkMetres)
     val listState = rememberLazyListState()
     val reorderState = rememberReorderableLazyListState(listState) { from, to ->
         val ids = (dragOrder ?: currentIds).toMutableList()
@@ -148,7 +165,8 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace
                     SettingsButton(onOpenSettings)
                 })
             }
-            item(key = "trains") { TrainStatusCard(vm) }
+            item(key = "trains") { TrainStatusCard(vm, onOpenStation = onOpenStation) }
+            item(key = "road") { RoadUpdatesCard(vm, Modifier.animateItem()) }
 
             if (loaded && favourites.isEmpty()) {
                 item {
@@ -157,7 +175,8 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace
             }
 
             // Overnight nothing is running: show when the first saved bus starts instead of a gap.
-            val firstBus = if (hero == null) {
+            // Only when none of your saved buses is running, not merely when none is catchable.
+            val firstBus = if (hero == null && candidates.none { it.service.buses.isNotEmpty() }) {
                 candidates.mapNotNull { c -> c.service.firstBus?.let { label -> labelMinutes(label)?.let { Triple(it, label, c) } } }
                     .minByOrNull { it.first }
             } else null
@@ -183,15 +202,16 @@ fun FavouritesScreen(vm: AppViewModel, onOpenStop: (String) -> Unit, onOpenPlace
                 }
             }
 
-            if (hero != null) {
+            if (nextUps.isNotEmpty()) {
                 item(key = "hero") {
-                    HeroCard(
-                        vm, hero, now,
-                        onClick = { onOpenStop(hero.stopCode) },
-                        tracking = tracking.tracked == Tracked(hero.stopCode, hero.service.serviceNo),
-                        onToggleTracking = { tracking.toggle(hero.stopCode, hero.service.serviceNo) },
-                        modifier = Modifier.animateItem(),
-                    )
+                    NextUpPager(nextUps, Modifier.animateItem()) { nextUp ->
+                        HeroCard(
+                            vm, nextUp, now,
+                            onClick = { onOpenStop(nextUp.stopCode) },
+                            tracking = tracking.tracked == Tracked(nextUp.stopCode, nextUp.service.serviceNo),
+                            onToggleTracking = { tracking.toggle(nextUp.stopCode, nextUp.service.serviceNo) },
+                        )
+                    }
                 }
             }
 
@@ -282,9 +302,14 @@ private fun HeroCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        "${vm.stop(nextUp.stopCode)?.description ?: ""} · ${nextUp.stopCode}",
+                        listOfNotNull(
+                            vm.stop(nextUp.stopCode)?.description,
+                            nextUp.stopCode,
+                            vm.stopsAway(nextUp.stopCode, service.serviceNo, next)?.let(::stopsAwayLabel),
+                        ).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                     )
+                    lastBusNotice(service, now)?.let { Text(it, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold) }
                 }
                 CookieCountdown(
                     value = if (minutes < 1) "Arr" else minutes.toString(),
@@ -293,11 +318,17 @@ private fun HeroCard(
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 LoadBars(next.load, colors.onPrimaryContainer)
-                Text(listOf(next.load.label, next.type.label.let { if (it.isEmpty()) it else "$it deck" }).filter { it.isNotEmpty() }.joinToString(" · "), style = MaterialTheme.typography.labelLarge)
-                Spacer(Modifier.weight(1f))
+                // On a narrow (swipeable) card this label gives way first, so the times and bell always fit.
+                Text(
+                    listOf(next.load.label, next.type.label.let { if (it.isEmpty()) it else "$it deck" }).filter { it.isNotEmpty() }.joinToString(" · "),
+                    style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
                 val later = service.buses.dropWhile { it != next }.drop(1).map { minutesUntil(it.eta, now) }
                 if (later.isNotEmpty()) {
-                    Text("then ${later.joinToString(" · ")} min", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                    Text("then ${later.joinToString(" · ")} min", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
                 }
                 FilledIconToggleButton(
                     checked = tracking,
@@ -479,7 +510,7 @@ fun ServiceRow(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     LoadBars(it.load, colors.onSurface)
                     Text(
-                        listOfNotNull(caption, it.load.label.ifEmpty { null }, "scheduled".takeIf { _ -> !it.monitored }).joinToString(" · "),
+                        listOfNotNull(service?.let { s -> lastBusNotice(s, now) }, caption, it.load.label.ifEmpty { null }, "scheduled".takeIf { _ -> !it.monitored }).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.onSurfaceVariant,
                         maxLines = 1,
@@ -544,6 +575,38 @@ private fun PlaceCard(place: Favourite.Place, board: List<Pair<String, ServiceAr
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     next.forEach { (_, s) -> MiniTile(s, now, Modifier.weight(1f)) }
                     repeat(4 - next.size) { Box(Modifier.weight(1f)) }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The Next up card, swipeable through up to three buses. The next card peeks in at the edge and dots
+ * show where you are. Pages are keyed by stop and service, so a reorder doesn't jump to another bus.
+ */
+@Composable
+private fun NextUpPager(nextUps: List<NextUp>, modifier: Modifier = Modifier, page: @Composable (NextUp) -> Unit) {
+    val state = rememberPagerState { nextUps.size }
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        HorizontalPager(
+            state = state,
+            contentPadding = PaddingValues(end = if (nextUps.size > 1) 28.dp else 0.dp),
+            pageSpacing = 8.dp,
+            key = { nextUps[it].stopCode + "/" + nextUps[it].service.serviceNo },
+            verticalAlignment = Alignment.Top,
+        ) { index -> page(nextUps[index]) }
+        if (nextUps.size > 1) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                repeat(nextUps.size) { i ->
+                    val selected = i == state.currentPage
+                    val width by animateDpAsState(if (selected) 18.dp else 6.dp, MaterialTheme.motionScheme.fastSpatialSpec(), label = "dot")
+                    Box(
+                        Modifier
+                            .size(width = width, height = 6.dp)
+                            .clip(CircleShape)
+                            .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+                    )
                 }
             }
         }

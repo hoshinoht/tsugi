@@ -16,14 +16,38 @@ class LtaApi(
 
     /** Returns null when LTA sends an empty body (no buses on the road, or maintenance). */
     suspend fun busArrival(stopCode: String): BusArrivalResponse? =
-        get("v3/BusArrival?BusStopCode=$stopCode")
+        // Stop codes can arrive in intents from other apps, so only ever send a 5-digit code.
+        if (!stopCode.matches(STOP_CODE)) null else get("v3/BusArrival?BusStopCode=$stopCode")
 
     /** One page of up to 500 route stops (every stop on every service). */
     suspend fun busRoutes(skip: Int): List<BusRouteDto> =
         get<BusRoutesResponse>("BusRoutes?\$skip=$skip")?.value.orEmpty()
 
+    /** One page of up to 500 service directions: category, loop point and frequency. */
+    suspend fun busServices(skip: Int): List<BusServiceDto> =
+        get<BusServicesResponse>("BusServices?\$skip=$skip")?.value.orEmpty()
+
+    /** Road incidents across Singapore (accidents, breakdowns, diversions…); updated about every 2 minutes. */
+    suspend fun trafficIncidents(): TrafficIncidentsResponse? = get("TrafficIncidents")
+
+    /** One page of planned route changes; LTA publishes them on or after the day they take effect. */
+    suspend fun plannedBusRoutes(skip: Int): List<PlannedBusRouteDto> =
+        get<PlannedBusRoutesResponse>("PlannedBusRoutes?\$skip=$skip")?.value.orEmpty()
+
     /** Line status and disruption alerts for the whole MRT/LRT network. */
     suspend fun trainServiceAlerts(): TrainAlertsResponse? = get("TrainServiceAlerts")
+
+    /** Crowding at every station on [line] (e.g. "NSL", "CGL", "SLRT") for the last 10 minutes. */
+    suspend fun crowdRealTime(line: String): List<CrowdRealTimeDto> =
+        get<CrowdRealTimeResponse>("PCDRealTime?TrainLine=$line")?.value.orEmpty()
+
+    /** Forecast crowding at every station on [line], in half-hours, for today. */
+    suspend fun crowdForecast(line: String): List<CrowdForecastDayDto> =
+        get<CrowdForecastResponse>("PCDForecast?TrainLine=$line")?.value.orEmpty()
+
+    /** Lifts under maintenance across the network. */
+    suspend fun liftMaintenance(): List<LiftMaintenanceDto> =
+        get<LiftMaintenanceResponse>("v2/FacilitiesMaintenance")?.value.orEmpty()
 
     /** One page of up to 500 stops. */
     suspend fun busStops(skip: Int): List<BusStopDto> =
@@ -44,6 +68,7 @@ class LtaApi(
     }
 
     private companion object {
+        val STOP_CODE = Regex("^\\d{5}$")
         const val BASE_URL = "https://datamall2.mytransport.sg/ltaodataservice/"
     }
 }

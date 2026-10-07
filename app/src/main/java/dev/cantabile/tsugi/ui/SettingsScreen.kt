@@ -1,5 +1,11 @@
 package dev.cantabile.tsugi.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -22,6 +29,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -43,6 +51,18 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
     val radius by vm.radiusM.collectAsStateWithLifecycle()
     val sort by vm.stopSort.collectAsStateWithLifecycle()
     val alert by vm.alertMinutes.collectAsStateWithLifecycle()
+    val disruptions by vm.disruptionAlerts.collectAsStateWithLifecycle()
+    val developerMode by vm.developerMode.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) vm.setDisruptionAlerts(true)
+        else Toast.makeText(context, "Allow notifications to get disruption alerts", Toast.LENGTH_LONG).show()
+    }
+    val setDisruptions: (Boolean) -> Unit = { on ->
+        val needsPermission = on && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        if (needsPermission) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS) else vm.setDisruptionAlerts(on)
+    }
 
     Scaffold(
         containerColor = colors.surface,
@@ -80,11 +100,42 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
                 }
             }
             item {
+                Setting("Train disruptions", "Notify me when an MRT or LRT line near my saved stops is disrupted. Checked every 15 minutes.") {
+                    Choices(listOf(false, true), disruptions, { if (it) "On" else "Off" }, setDisruptions)
+                }
+            }
+            item {
+                Setting("Developer mode", "Shows testing tools for checking the app's alerts and data.") {
+                    Text(
+                        "Only turn on if you know what you are doing!",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.error,
+                    )
+                    Choices(listOf(false, true), developerMode, { if (it) "On" else "Off" }, vm::setDeveloperMode)
+                }
+            }
+            if (developerMode) {
+                item {
+                    Setting("Developer", "Testing tools. These don't change your settings or favourites.") {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Train disruption alert", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "Sends LTA's sample disruption (North East Line) as a notification marked \"Test\", to check alerts get through.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.onSurfaceVariant,
+                            )
+                            FilledTonalButton(onClick = vm::sendTestDisruption, modifier = Modifier.padding(top = 4.dp)) { Text("Send a test alert") }
+                        }
+                    }
+                }
+            }
+            item {
                 Surface(shape = RoundedCornerShape(24.dp), color = colors.surfaceContainer) {
                     Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("Tsugi ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Text(
-                            "Bus and train data from LTA DataMall. Address search by OneMap. MIT licensed.",
+                            "Bus and train data from LTA DataMall. Address search and maps by OneMap. Station locations from SG Rail Data. MIT licensed.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = colors.onSurfaceVariant,
                         )

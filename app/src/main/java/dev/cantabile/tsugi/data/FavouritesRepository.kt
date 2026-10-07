@@ -43,6 +43,26 @@ fun placeNameFrom(stopDescription: String): String = stopDescription
 val Favourite.allStopCodes: List<String>
     get() = if (this is Favourite.Place) stopCodes else listOf(stopCode)
 
+/** The Favourites card a favourite belongs to: a place, a whole stop, or a stop's pinned buses. */
+val Favourite.cardId: String
+    get() = when (this) {
+        is Favourite.Place -> "place:$id"
+        is Favourite.Stop -> "stop:$stopCode"
+        is Favourite.Service -> "group:$stopCode"
+    }
+
+/**
+ * Favourites in the user's card order, as on the Favourites screen: cards without a saved
+ * position go last, places first, then whole stops, then pinned buses.
+ */
+fun inCardOrder(favourites: List<Favourite>, order: List<String>): List<Favourite> =
+    favourites.sortedWith(
+        compareBy(
+            { f -> order.indexOf(f.cardId).let { if (it < 0) Int.MAX_VALUE else it } },
+            { f -> when (f) { is Favourite.Place -> 0; is Favourite.Stop -> 1; is Favourite.Service -> 2 } },
+        ),
+    )
+
 class FavouritesRepository(
     private val store: DataStore<Preferences>,
     private val json: Json,

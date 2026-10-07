@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.3.0
+
+### Added
+
+- **Stations:** a screen for every MRT and LRT station with its lines and status, platform crowding now and forecast by the half-hour, lifts under maintenance, and the bus stops at its exits with live arrivals. "Save as place" saves those stops.
+- **Stations everywhere:** bus stops next to a station show it with line colours; Nearby lists stations around you; Search finds stations by name or code.
+- **Disruptions:** the card names affected stations and links each one, so you can find a bus there. Optional notifications when a line near your saved stops is disrupted, and when it's back to normal.
+- **Last bus:** a chip in the 45 minutes before tonight's last bus, on stops and saved buses.
+- **Stops away:** how many stops away the next bus is, on stops, Next up and the tracking notification.
+- **Leave-now alerts:** bus alerts count your walk to the stop.
+- **Frequency:** how often a service runs right now, plus category and loop point on its route.
+- **Widget setup:** show all favourites, one saved stop or one place; rows fill the widget's height.
+- **Shortcuts:** your first saved stops and places on the launcher icon, and any stop pinned to the home screen.
+- **Nearby map:** an optional map with the closest stops numbered as in the list.
+- **Wide screens:** two panes on tablets and unfolded foldables.
+
+### Changed
+
+- Public holidays use the Sunday timetable.
+- Search understands spelled-out words ("station", "opposite", "primary school"), any word order and small typos.
+- Tap a bus number on a stop to open its route, with your stop highlighted and the next buses marked where they are. Route stops show first and last buses.
+- Screens stack, so stops and stations can open each other; back goes through them in order.
+
+- **Nearby is much faster:** it shows stops at once from the phone's last known position (if under 10 minutes old), then refines with a fresh fix, reshuffling only if you've moved more than 25 m. Location also warms up at launch. Pull down to re-locate.
+- **Road updates:** a card on Favourites lists traffic incidents (accidents, breakdowns, diversions…) on the stretch your saved buses travel before reaching your stop, up to 15 stops back. It also notes LTA route changes to your saved services, re-downloading route data when a change is newer than the cache. Hidden when nothing is relevant.
+- **Swipeable Next up:** swipe the card for the next two best buses (same rules: nearest saved stop, pinned first, catchable, soonest). The next card peeks in at the edge, with page dots below.
+- **Sticky Next up:** the card stays on its bus unless another is at least 2 minutes sooner, so buses a minute apart no longer swap back and forth as estimates jitter.
+- **Test disruption alert:** a "Send a test alert" button under Train disruptions in Settings sends LTA's sample disruption through the real notification, so you can check alerts get through.
+- **Leave-now alerts** allow 30% extra for winding streets, and only use a position from the last 3 minutes.
+
+### Fixed
+
+- "Stops away" was wrong on loop and out-and-back routes: it could snap a bus to the stop on the other side of the road. It now walks back from your stop to the bus.
+- The widget setup screen could crash when opened with a widget id that isn't Tsugi's.
+- No more "Trains back to normal" alert just because you unsaved the stops near a disrupted line.
+- The disruption headline counts lines, not segments: one line in both directions no longer reads "2 lines disrupted".
+- Night-service last buses are matched to the right day (the service day now starts at 5 am).
+- Bus frequencies are marked "on weekdays" on other days, since LTA only publishes weekday figures.
+- Pinned shortcuts to a deleted place are disabled.
+- Only 5-digit stop codes are sent to LTA, and the widget's clock uses Singapore time.
+- "1 stop within 200 m", not "1 stops".
+- Services not running now showed today's first-bus time even after it had passed (e.g. a morning-only express at 8:50 am). They now show the next one: today's if it's still to come, otherwise "tomorrow 8:42 am" ("Tmr 8:42" on tiles).
+- Away from your saved stops, Next up showed "No buses running" in the middle of the day: the walking-time check applied to stops kilometres away, so every bus looked uncatchable. Only stops within 400 m count the walk now, and the overnight card only shows when no saved bus is running at all.
+
 ## 0.2.0
 
 ### Added

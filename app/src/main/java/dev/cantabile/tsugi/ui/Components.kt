@@ -83,6 +83,9 @@ import androidx.lifecycle.repeatOnLifecycle
 import dev.cantabile.tsugi.R
 import dev.cantabile.tsugi.data.Bus
 import dev.cantabile.tsugi.data.Load
+import dev.cantabile.tsugi.data.SINGAPORE
+import dev.cantabile.tsugi.data.ServiceArrivals
+import dev.cantabile.tsugi.data.timeLabel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.time.Duration
@@ -122,6 +125,17 @@ fun minutesUntil(eta: Instant, now: Instant): Long = Duration.between(now, eta).
 fun etaLabel(bus: Bus, now: Instant): String {
     val m = minutesUntil(bus.eta, now)
     return if (m < 1) "Arr" else m.toString()
+}
+
+/** How long before the last bus to start warning about it. */
+private val LAST_BUS_WARNING: Duration = Duration.ofMinutes(45)
+
+/** "Last bus 11:42 pm" while tonight's last bus is under 45 minutes away, else null. */
+fun lastBusNotice(service: ServiceArrivals, now: Instant): String? {
+    val last = service.lastBus ?: return null
+    val until = Duration.between(now, last)
+    if (until.isNegative || until > LAST_BUS_WARNING) return null
+    return "Last bus ${timeLabel(last.atZone(SINGAPORE).toLocalTime())}"
 }
 
 /** Corner radii for a connected row of tiles: big outer corners, small inner ones. */
