@@ -177,7 +177,7 @@ private fun BusHere(bus: Bus, now: Instant) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (m < 1) ArrivingNow(fontSize = 18.sp) else InkMinutes(m, fontSize = 22.sp)
+        InkCountdown(m, style = inkMinutesStyle(22.sp), nowSize = 18.sp)
         Box(Modifier.size(38.dp).clip(CircleShape).background(colors.primary), contentAlignment = Alignment.Center) {
             Icon(painterResource(R.drawable.ic_bus), contentDescription = null, tint = colors.onPrimary, modifier = Modifier.size(20.dp))
         }

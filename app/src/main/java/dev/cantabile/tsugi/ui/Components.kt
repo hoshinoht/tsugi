@@ -18,8 +18,14 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.draw.alpha
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.foundation.layout.PaddingValues
+import kotlin.math.PI
+import kotlin.math.sin
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.graphics.shapes.Morph
 import androidx.compose.animation.core.LinearEasing
@@ -175,31 +181,92 @@ fun cardColor(expressive: Color): Color =
  * accent colour.
  */
 @Composable
-fun ArrivingNow(modifier: Modifier = Modifier, fontSize: TextUnit = 19.sp) {
+fun ArrivingNow(modifier: Modifier = Modifier, fontSize: TextUnit = 19.sp, holdHeightOf: TextStyle? = null) {
     val accent = MaterialTheme.colorScheme.tertiary
-    Row(
-        modifier.clearAndSetSemantics { contentDescription = "Arriving now" },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy((fontSize.value * 0.22f).dp),
-    ) {
-        // The dot grows with the word, so it reads as one mark at every size.
-        Box(Modifier.size((fontSize.value * 0.3f).coerceAtLeast(6f).dp).background(accent, CircleShape))
-        Text("Now", color = accent, fontFamily = Mincho, fontWeight = FontWeight.Black, fontSize = fontSize)
+    // A soft ring ripples out of the dot as it swells a little. Read only while drawing, so the
+    // pulse never recomposes; off when the system's animations are.
+    val pulse = if (rememberReducedMotion()) null else rememberInfiniteTransition(label = "now")
+        .animateFloat(0f, 1f, infiniteRepeatable(tween(1600, easing = LinearOutSlowInEasing), RepeatMode.Restart), label = "pulse")
+    // [holdHeightOf] is the style of the minutes "Now" replaces: an invisible line in it keeps the
+    // slot as tall as before, so the card doesn't shrink when the bus arrives.
+    Box(modifier.clearAndSetSemantics { contentDescription = "Arriving now" }, contentAlignment = Alignment.CenterStart) {
+        if (holdHeightOf != null) Text("0", style = holdHeightOf, modifier = Modifier.width(0.dp).alpha(0f))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy((fontSize.value * 0.22f).dp),
+        ) {
+            // The dot grows with the word, so it reads as one mark at every size.
+            Box(
+                Modifier
+                    .size((fontSize.value * 0.3f).coerceAtLeast(6f).dp)
+                    .drawBehind {
+                        val t = pulse?.value ?: return@drawBehind
+                        drawCircle(accent.copy(alpha = 0.45f * (1 - t)), radius = size.minDimension / 2 * (1 + 1.4f * t))
+                    }
+                    .graphicsLayer {
+                        val s = 1f + 0.12f * sin(PI * (pulse?.value ?: 0f)).toFloat()
+                        scaleX = s
+                        scaleY = s
+                    }
+                    .background(accent, CircleShape),
+            )
+            Text("Now", color = accent, fontFamily = Mincho, fontWeight = FontWeight.Black, fontSize = fontSize)
+        }
     }
 }
 
+/** The Mincho numeral style for minutes, at [fontSize]. */
+fun inkMinutesStyle(fontSize: TextUnit) = TextStyle(fontFamily = Mincho, fontWeight = FontWeight.Black, fontSize = fontSize)
+
 /** Minutes in Mincho with a small sans "min", as in Ink & Paper's rows and tiles. */
 @Composable
-fun InkMinutes(minutes: Long, modifier: Modifier = Modifier, fontSize: TextUnit = 26.sp, unitSize: TextUnit = 12.sp) {
+fun InkMinutes(
+    minutes: Long,
+    modifier: Modifier = Modifier,
+    style: TextStyle = inkMinutesStyle(26.sp),
+    unitSize: TextUnit = 12.sp,
+    unitPadding: PaddingValues = PaddingValues(start = 3.dp, bottom = 4.dp),
+) {
     Row(modifier, verticalAlignment = Alignment.Bottom) {
-        RollingText("$minutes", style = TextStyle(fontFamily = Mincho, fontWeight = FontWeight.Black, fontSize = fontSize))
+        RollingText("$minutes", style = style)
         Text(
             "min",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = unitSize,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(start = 3.dp, bottom = 4.dp),
+            modifier = Modifier.padding(unitPadding),
         )
+    }
+}
+
+/**
+ * Ink & Paper's countdown: Mincho minutes that roll into "Now" when the bus arrives, like the
+ * numbers roll between refreshes, and keep the same height so nothing around them moves.
+ */
+@Composable
+fun InkCountdown(
+    minutes: Long,
+    modifier: Modifier = Modifier,
+    style: TextStyle = inkMinutesStyle(26.sp),
+    unitSize: TextUnit = 12.sp,
+    unitPadding: PaddingValues = PaddingValues(start = 3.dp, bottom = 4.dp),
+    nowSize: TextUnit = 19.sp,
+) {
+    val slide = MaterialTheme.motionScheme.fastSpatialSpec<IntOffset>()
+    val fade = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
+    AnimatedContent(
+        targetState = minutes < 1,
+        modifier = modifier,
+        transitionSpec = {
+            // "Now" comes up from below, like a falling number; the next bus drops in from above.
+            val dir = if (targetState) 1 else -1
+            // Unclipped so the pulse ring isn't cut off at the edges.
+            (slideInVertically(slide) { dir * it } + fadeIn(fade)) togetherWith
+                (slideOutVertically(slide) { -dir * it } + fadeOut(fade)) using SizeTransform(clip = false)
+        },
+        label = "inkCountdown",
+    ) { arriving ->
+        if (arriving) ArrivingNow(fontSize = nowSize, holdHeightOf = style) else InkMinutes(minutes, style = style, unitSize = unitSize, unitPadding = unitPadding)
     }
 }
 
@@ -428,7 +495,7 @@ fun ArrivalTile(bus: Bus, now: Instant, shape: Shape, modifier: Modifier = Modif
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (ink) {
-            if (arriving) ArrivingNow(fontSize = 18.sp) else InkMinutes(minutesUntil(bus.eta, now), fontSize = 24.sp, unitSize = 11.sp)
+            InkCountdown(minutesUntil(bus.eta, now), style = inkMinutesStyle(24.sp), unitSize = 11.sp, nowSize = 18.sp)
         } else Row(verticalAlignment = Alignment.Bottom) {
             RollingText(etaLabel(bus, now), color = fg, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             if (!arriving) {

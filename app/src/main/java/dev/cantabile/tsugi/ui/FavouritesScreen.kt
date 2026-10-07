@@ -415,20 +415,13 @@ private fun InkHeroCard(
             }
             HorizontalDivider(thickness = 1.dp, color = colors.outlineVariant)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (minutes < 1) {
-                    ArrivingNow(fontSize = 30.sp)
-                } else {
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        RollingText("$minutes", style = TextStyle(fontFamily = Mincho, fontWeight = FontWeight.Black, fontSize = 56.sp, lineHeight = 56.sp))
-                        Text(
-                            "min",
-                            color = colors.onSurfaceVariant,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(start = 6.dp, bottom = 8.dp),
-                        )
-                    }
-                }
+                InkCountdown(
+                    minutes,
+                    style = HERO_MINUTES,
+                    unitSize = 16.sp,
+                    unitPadding = PaddingValues(start = 6.dp, bottom = 8.dp),
+                    nowSize = 30.sp,
+                )
                 LoadBars(next.load, colors.onSurface, Modifier.padding(start = 4.dp))
                 // Takes the space left, and gives way first on a narrow (swipeable) card so the bell always fits.
                 val later = service.buses.dropWhile { it != next }.drop(1).map { minutesUntil(it.eta, now) }
@@ -557,6 +550,9 @@ private fun DragHandle(handleModifier: Modifier) {
         modifier = handleModifier.padding(12.dp).size(20.dp),
     )
 }
+
+/** Ink & Paper's Next up minutes. */
+private val HERO_MINUTES = inkMinutesStyle(56.sp).copy(lineHeight = 56.sp)
 
 /** A stop's name on a card: Mincho 900 at 18 sp in Ink & Paper. */
 @Composable
@@ -725,7 +721,7 @@ private fun InkServiceRow(
             if (first != null) {
                 Column(horizontalAlignment = Alignment.End) {
                     val m = minutesUntil(first.eta, now)
-                    if (m < 1) ArrivingNow() else InkMinutes(m)
+                    InkCountdown(m)
                     val later = service?.buses.orEmpty().drop(1).map { b -> minutesUntil(b.eta, now) }
                     if (later.isNotEmpty()) {
                         Text(later.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
