@@ -29,6 +29,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -174,14 +175,15 @@ fun cardColor(expressive: Color): Color =
  * accent colour.
  */
 @Composable
-fun ArrivingNow(modifier: Modifier = Modifier, fontSize: TextUnit = 24.sp) {
+fun ArrivingNow(modifier: Modifier = Modifier, fontSize: TextUnit = 19.sp) {
     val accent = MaterialTheme.colorScheme.tertiary
     Row(
         modifier.clearAndSetSemantics { contentDescription = "Arriving now" },
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy((fontSize.value * 0.22f).dp),
     ) {
-        Box(Modifier.size(8.dp).background(accent, RoundedCornerShape(4.dp)))
+        // The dot grows with the word, so it reads as one mark at every size.
+        Box(Modifier.size((fontSize.value * 0.3f).coerceAtLeast(6f).dp).background(accent, CircleShape))
         Text("Now", color = accent, fontFamily = Mincho, fontWeight = FontWeight.Black, fontSize = fontSize)
     }
 }
@@ -426,7 +428,7 @@ fun ArrivalTile(bus: Bus, now: Instant, shape: Shape, modifier: Modifier = Modif
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (ink) {
-            if (arriving) ArrivingNow(fontSize = 22.sp) else InkMinutes(minutesUntil(bus.eta, now), fontSize = 24.sp, unitSize = 11.sp)
+            if (arriving) ArrivingNow(fontSize = 18.sp) else InkMinutes(minutesUntil(bus.eta, now), fontSize = 24.sp, unitSize = 11.sp)
         } else Row(verticalAlignment = Alignment.Bottom) {
             RollingText(etaLabel(bus, now), color = fg, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             if (!arriving) {

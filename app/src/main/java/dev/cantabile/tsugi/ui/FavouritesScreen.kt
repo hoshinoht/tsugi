@@ -416,7 +416,7 @@ private fun InkHeroCard(
             HorizontalDivider(thickness = 1.dp, color = colors.outlineVariant)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (minutes < 1) {
-                    ArrivingNow(fontSize = 40.sp)
+                    ArrivingNow(fontSize = 30.sp)
                 } else {
                     Row(verticalAlignment = Alignment.Bottom) {
                         RollingText("$minutes", style = TextStyle(fontFamily = Mincho, fontWeight = FontWeight.Black, fontSize = 56.sp, lineHeight = 56.sp))

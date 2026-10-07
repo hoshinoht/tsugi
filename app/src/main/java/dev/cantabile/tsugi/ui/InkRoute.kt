@@ -89,7 +89,8 @@ fun InkRouteStop(
 ) {
     val colors = MaterialTheme.colorScheme
     val ink = colors.onSurface
-    val wash = lerp(colors.outlineVariant, colors.outline, 0.35f).copy(alpha = 0.75f)
+    // Pale, but clearly a line: halfway from the card border to the muted text colour.
+    val wash = lerp(colors.outlineVariant, colors.onSurfaceVariant, 0.5f)
     val card = colors.surfaceContainer
     val dotSize = if (mark == RouteMark.You) 22.dp else 16.dp
     Box(Modifier.clickable(onClick = onClick)) {
@@ -147,7 +148,7 @@ fun InkRouteStop(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(meta, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(meta, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (buses.isNotEmpty()) {
                 BusHere(buses.first(), now)
@@ -176,7 +177,7 @@ private fun BusHere(bus: Bus, now: Instant) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (m < 1) ArrivingNow(fontSize = 22.sp) else InkMinutes(m, fontSize = 22.sp)
+        if (m < 1) ArrivingNow(fontSize = 18.sp) else InkMinutes(m, fontSize = 22.sp)
         Box(Modifier.size(38.dp).clip(CircleShape).background(colors.primary), contentAlignment = Alignment.Center) {
             Icon(painterResource(R.drawable.ic_bus), contentDescription = null, tint = colors.onPrimary, modifier = Modifier.size(20.dp))
         }
@@ -186,7 +187,7 @@ private fun BusHere(bus: Bus, now: Instant) {
 private val LINE_START = 14.dp
 private val DOT_COLUMN = 26.dp
 private val INK_WIDTH = 10.dp
-private val WASH_WIDTH = 6.dp
+private val WASH_WIDTH = 7.dp
 private const val PASSED_ALPHA = 0.4f
 
 /**
@@ -242,11 +243,11 @@ private fun DrawScope.drawBrush(
     val gapEnd = bottom - if (taper) taperLength else 0f
     if (gapEnd <= top) return
     drawLine(
-        paper.copy(alpha = 0.55f), Offset(x - width * 0.2f, top), Offset(x - width * 0.2f, gapEnd),
+        paper.copy(alpha = 0.3f), Offset(x - width * 0.2f, top), Offset(x - width * 0.2f, gapEnd),
         strokeWidth = 0.8.dp.toPx(), cap = StrokeCap.Butt, pathEffect = PathEffect.dashPathEffect(dashes, phase),
     )
     drawLine(
-        paper.copy(alpha = 0.45f), Offset(x + width * 0.25f, top), Offset(x + width * 0.25f, gapEnd),
+        paper.copy(alpha = 0.2f), Offset(x + width * 0.25f, top), Offset(x + width * 0.25f, gapEnd),
         strokeWidth = 0.7.dp.toPx(), cap = StrokeCap.Butt, pathEffect = PathEffect.dashPathEffect(dashes, phase + 11.dp.toPx()),
     )
 }

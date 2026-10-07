@@ -141,8 +141,9 @@ fun ServiceScreen(vm: AppViewModel, serviceNo: String, onBack: () -> Unit, onOpe
                 // One bordered card holding the whole line, so the brush runs unbroken from stop to stop.
                 item(key = "route-$direction") {
                     val fromIndex = route.indexOfFirst { it.stop == fromStop }.takeIf { it >= 0 }
-                    // The ink reaches the nearest bus still on its way to your stop.
-                    val busIndex = busesAt.keys.filter { fromIndex == null || it <= fromIndex }.maxOrNull() ?: -1
+                    // The ink reaches the nearest bus still on its way to your stop. Opened without a
+                    // stop there's no "your bus", so the whole line is ink and nothing reads as passed.
+                    val busIndex = if (fromIndex == null) route.size else busesAt.keys.filter { it <= fromIndex }.maxOrNull() ?: -1
                     Surface(
                         Modifier.padding(horizontal = 4.dp),
                         shape = RoundedCornerShape(26.dp),
@@ -156,11 +157,12 @@ fun ServiceScreen(vm: AppViewModel, serviceNo: String, onBack: () -> Unit, onOpe
                                     index = i,
                                     count = route.size,
                                     name = stop?.description ?: r.stop,
-                                    meta = listOfNotNull(r.stop, stop?.road, r.firstBusLabel(now)?.let { "first $it" }, r.lastBusLabel(now)?.let { "last $it" }).joinToString(" · "),
+                                    // One line: the code and the day's span; the road is on the stop's own screen.
+                                    meta = listOfNotNull(r.stop, r.firstBusLabel(now)?.let { "first $it" }, r.lastBusLabel(now)?.let { "last $it" }).joinToString(" · "),
                                     mark = when {
                                         i == fromIndex -> RouteMark.You
                                         busesAt[i] != null -> RouteMark.Bus
-                                        i < busIndex -> RouteMark.Passed
+                                        fromIndex != null && i < busIndex -> RouteMark.Passed
                                         else -> RouteMark.Ahead
                                     },
                                     travelledTo = busIndex,

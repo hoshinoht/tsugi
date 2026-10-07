@@ -31,10 +31,12 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -58,7 +60,6 @@ import dev.cantabile.tsugi.data.allStopCodes
 import dev.cantabile.tsugi.tracking.Tracked
 import dev.cantabile.tsugi.data.ServiceArrivals
 import dev.cantabile.tsugi.data.Station
-import dev.cantabile.tsugi.data.NearbyStation
 import dev.cantabile.tsugi.data.StopSort
 import dev.cantabile.tsugi.data.stopsAwayLabel
 import java.time.Duration
@@ -139,7 +140,7 @@ fun StopScreen(
                 item {
                     Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         if (TsugiTheme.isInk) {
-                            InkStopHeader(vm, code, stop?.description ?: code, stop?.road, stations.firstOrNull())
+                            InkStopHeader(code, stop?.description ?: code, stop?.road)
                         } else {
                             Text(stop?.description ?: code, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold)
                             Text(
@@ -190,20 +191,15 @@ fun StopScreen(
 }
 
 /**
- * Ink & Paper's stop header: the name in Mincho, a short vermilion underline, then the road, code,
- * nearest station and the stop across the road.
+ * Ink & Paper's stop header: the name in Mincho, a short vermilion underline, then the road and
+ * code. The station and across-the-road chips below carry the rest.
  */
 @Composable
-private fun InkStopHeader(vm: AppViewModel, code: String, name: String, road: String?, station: NearbyStation?) {
+private fun InkStopHeader(code: String, name: String, road: String?) {
     Text(name, style = MaterialTheme.typography.headlineLarge, fontSize = 34.sp, lineHeight = 40.sp)
     Box(Modifier.padding(vertical = 2.dp).size(width = 48.dp, height = 3.dp).background(MaterialTheme.colorScheme.tertiary, RoundedCornerShape(2.dp)))
     Text(
-        listOfNotNull(
-            road,
-            code,
-            station?.let { "${it.station.title} ${it.distanceM} m" },
-            vm.acrossTheRoad(code)?.let { "across the road: ${it.stop.description}" },
-        ).joinToString(" · "),
+        listOfNotNull(road, code).joinToString(" · "),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 4.dp),
@@ -246,18 +242,25 @@ private fun SortToggle(sort: StopSort, onSort: (StopSort) -> Unit) {
     Row(Modifier.padding(top = 8.dp)) { Choices(StopSort.entries, sort, { it.label }, onSort) }
 }
 
-/** Wavy bar that fills up until the next 20 s refresh. */
+/**
+ * Wavy bar that fills up until the next 20 s refresh. The bar follows the frame clock so it glides;
+ * it's read only while drawing, so nothing recomposes per frame. The seconds label ticks with [now].
+ */
 @Composable
 private fun RefreshProgress(fetchedAt: Instant?, now: Instant) {
     val elapsed = fetchedAt?.let { Duration.between(it, now).toMillis() } ?: 0L
-    val progress = (elapsed.toFloat() / REFRESH_MS).coerceIn(0f, 1f)
+    var frameMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) withFrameMillis { frameMs = System.currentTimeMillis() }
+    }
+    val progress = { fetchedAt?.let { ((frameMs - it.toEpochMilli()).toFloat() / REFRESH_MS).coerceIn(0f, 1f) } ?: 0f }
     val remaining = ((REFRESH_MS - elapsed) / 1000).coerceAtLeast(0)
     Row(
         Modifier.fillMaxWidth().padding(top = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        LinearWavyProgressIndicator(progress = { progress }, modifier = Modifier.weight(1f))
+        LinearWavyProgressIndicator(progress = progress, modifier = Modifier.weight(1f))
         Text(
             if (fetchedAt == null) "…" else "${remaining}s",
             style = MaterialTheme.typography.labelMedium,
@@ -313,9 +316,6 @@ private fun ServiceCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.onSurfaceVariant,
                     )
-                }
-                if (ink && service.buses.firstOrNull()?.let { minutesUntil(it.eta, now) < 1 } == true) {
-                    ArrivingNow(fontSize = 22.sp)
                 }
                 if (running || tracking) {
                     IconToggleButton(checked = tracking, onCheckedChange = { onToggleTracking() }) {
