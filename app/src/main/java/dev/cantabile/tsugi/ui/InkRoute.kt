@@ -27,6 +27,12 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -61,6 +67,42 @@ fun InkServiceHeader(serviceNo: String, towards: String?, modifier: Modifier = M
             Text(towards ?: serviceNo, style = MaterialTheme.typography.headlineMedium, fontSize = 30.sp, lineHeight = 34.sp)
         }
     }
+}
+
+/**
+ * One row's slice of a bordered card that spans several lazy list items: the first row has the top
+ * corners and padding, the last the bottom ones, and the border is drawn only on the card's outer
+ * edges, so the stacked slices read as one card while only the visible rows are built.
+ */
+@Composable
+fun Modifier.cardSlice(index: Int, count: Int, radius: Dp = 26.dp, edge: Dp = 12.dp): Modifier {
+    val colors = MaterialTheme.colorScheme
+    val card = colors.surfaceContainer
+    val line = colors.outlineVariant
+    val first = index == 0
+    val last = index == count - 1
+    val shape = RoundedCornerShape(
+        topStart = if (first) radius else 0.dp,
+        topEnd = if (first) radius else 0.dp,
+        bottomStart = if (last) radius else 0.dp,
+        bottomEnd = if (last) radius else 0.dp,
+    )
+    return this
+        .padding(horizontal = 4.dp)
+        .drawBehind {
+            drawOutline(shape.createOutline(size, layoutDirection, this), card)
+            // Stroke a taller copy of the shape and clip it, so the open (inner) edges fall outside.
+            val stroke = 1.dp.toPx()
+            val above = if (first) 0f else stroke * 2
+            val below = if (last) 0f else stroke * 2
+            clipRect {
+                translate(stroke / 2, stroke / 2 - above) {
+                    val outline = shape.createOutline(Size(size.width - stroke, size.height - stroke + above + below), layoutDirection, this)
+                    drawOutline(outline, line, style = Stroke(stroke))
+                }
+            }
+        }
+        .padding(top = if (first) edge else 0.dp, bottom = if (last) edge else 0.dp)
 }
 
 /** Where a stop sits on the route relative to the bus you're waiting for and the stop you board at. */

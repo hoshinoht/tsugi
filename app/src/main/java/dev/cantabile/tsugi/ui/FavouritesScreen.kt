@@ -316,11 +316,14 @@ private fun HeroCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    // Walks the route, so only when the bus or the route data changes, not every tick.
+                    val routeIndex by vm.routes.collectAsStateWithLifecycle()
+                    val away = remember(nextUp.stopCode, service.serviceNo, next, routeIndex) { vm.stopsAway(nextUp.stopCode, service.serviceNo, next) }
                     Text(
                         listOfNotNull(
                             vm.stop(nextUp.stopCode)?.description,
                             nextUp.stopCode,
-                            vm.stopsAway(nextUp.stopCode, service.serviceNo, next)?.let(::stopsAwayLabel),
+                            away?.let(::stopsAwayLabel),
                         ).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -402,10 +405,13 @@ private fun InkHeroCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    // Walks the route, so only when the bus or the route data changes, not every tick.
+                    val routeIndex by vm.routes.collectAsStateWithLifecycle()
+                    val away = remember(nextUp.stopCode, service.serviceNo, next, routeIndex) { vm.stopsAway(nextUp.stopCode, service.serviceNo, next) }
                     Text(
                         listOfNotNull(
                             vm.stop(nextUp.stopCode)?.description ?: nextUp.stopCode,
-                            vm.stopsAway(nextUp.stopCode, service.serviceNo, next)?.let(::stopsAwayLabel),
+                            away?.let(::stopsAwayLabel),
                         ).joinToString(" · "),
                         style = MaterialTheme.typography.bodyMedium,
                         color = colors.onSurfaceVariant,

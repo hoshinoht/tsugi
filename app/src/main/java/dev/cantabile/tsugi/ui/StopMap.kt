@@ -24,6 +24,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,7 +67,7 @@ fun StopMap(vm: AppViewModel, stop: BusStop, onOpenStop: (String) -> Unit, modif
         val zoom = if (you != null && distanceM(you.first, you.second, stop.lat, stop.lng) > 120) 17 else 18
         value = vm.staticMap(lat, lng, zoom, night, pins)
     }
-    val across = vm.acrossTheRoad(stop.code)
+    val across = remember(stop.code) { vm.acrossTheRoad(stop.code) }
 
     Column(modifier) {
         Box(

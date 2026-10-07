@@ -20,7 +20,7 @@ import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
-import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -31,12 +31,10 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -83,7 +81,7 @@ fun StopScreen(
     val stations = remember(code, stationIndex, allStops) { vm.stationsNearStop(code) }
     PollArrivals(vm, listOf(code))
     LaunchedEffect(code) { vm.refreshHere() }
-    val now = rememberNow(1_000)
+    val now = rememberNow()
     val stop = vm.stop(code)
     val data = arrivals[code]
     val haptic = rememberToggleHaptic()
@@ -155,7 +153,7 @@ fun StopScreen(
                             }
                         }
                         stop?.let { StopMap(vm, it, onOpenStop, Modifier.padding(top = 12.dp)) }
-                        RefreshProgress(data?.fetchedAt, now)
+                        RefreshProgress(data?.fetchedAt)
                         SortToggle(sort, onSort = vm::setStopSort)
                     }
                 }
@@ -243,24 +241,22 @@ private fun SortToggle(sort: StopSort, onSort: (StopSort) -> Unit) {
 }
 
 /**
- * Wavy bar that fills up until the next 20 s refresh. The bar follows the frame clock so it glides;
- * it's read only while drawing, so nothing recomposes per frame. The seconds label ticks with [now].
+ * Bar that fills up until the next 20 s refresh. It steps once a second with its label, so while
+ * you wait the screen only draws once a second.
  */
 @Composable
-private fun RefreshProgress(fetchedAt: Instant?, now: Instant) {
+private fun RefreshProgress(fetchedAt: Instant?) {
+    val now = rememberNow(1_000)
     val elapsed = fetchedAt?.let { Duration.between(it, now).toMillis() } ?: 0L
-    var frameMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) withFrameMillis { frameMs = System.currentTimeMillis() }
-    }
-    val progress = { fetchedAt?.let { ((frameMs - it.toEpochMilli()).toFloat() / REFRESH_MS).coerceIn(0f, 1f) } ?: 0f }
+    val progress = (elapsed.toFloat() / REFRESH_MS).coerceIn(0f, 1f)
     val remaining = ((REFRESH_MS - elapsed) / 1000).coerceAtLeast(0)
     Row(
         Modifier.fillMaxWidth().padding(top = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        LinearWavyProgressIndicator(progress = progress, modifier = Modifier.weight(1f))
+        // Flat rather than wavy: the wave animates every frame, keeping the screen at 120 Hz while you wait.
+        LinearProgressIndicator(progress = { progress }, modifier = Modifier.weight(1f))
         Text(
             if (fetchedAt == null) "…" else "${remaining}s",
             style = MaterialTheme.typography.labelMedium,
@@ -307,9 +303,13 @@ private fun ServiceCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    // Walks the route, so only when the bus or the route data changes, not every tick.
+                    val routeIndex by vm.routes.collectAsStateWithLifecycle()
+                    val first = service.buses.firstOrNull()
+                    val away = remember(stopCode, service.serviceNo, first, routeIndex) { first?.let { vm.stopsAway(stopCode, service.serviceNo, it) } }
                     Text(
                         listOfNotNull(
-                            service.buses.firstOrNull()?.let { vm.stopsAway(stopCode, service.serviceNo, it) }?.let(::stopsAwayLabel),
+                            away?.let(::stopsAwayLabel),
                             service.operator,
                             service.frequency.takeIf { running },
                         ).joinToString(" · "),
