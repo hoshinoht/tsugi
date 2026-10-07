@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.PaddingValues
 import kotlin.math.PI
 import kotlin.math.sin
@@ -69,6 +70,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.preferredFrameRate
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
@@ -183,10 +185,20 @@ fun cardColor(expressive: Color): Color =
 @Composable
 fun ArrivingNow(modifier: Modifier = Modifier, fontSize: TextUnit = 19.sp, holdHeightOf: TextStyle? = null) {
     val accent = MaterialTheme.colorScheme.tertiary
-    // A soft ring ripples out of the dot as it swells a little. Read only while drawing, so the
-    // pulse never recomposes; off when the system's animations are.
-    val pulse = if (rememberReducedMotion()) null else rememberInfiniteTransition(label = "now")
-        .animateFloat(0f, 1f, infiniteRepeatable(tween(1600, easing = LinearOutSlowInEasing), RepeatMode.Restart), label = "pulse")
+    // A soft ring ripples out of the dot as it swells a little, a few times when "Now" appears, then
+    // holds still: a continuous pulse kept the screen drawing ~90 frames a second while you waited.
+    // It starts only once this is on screen (lists don't build off-screen rows), is read only while
+    // drawing so it never recomposes, and is off when the system's animations are. 1 = at rest.
+    val reducedMotion = rememberReducedMotion()
+    val pulse = remember { Animatable(1f) }
+    LaunchedEffect(reducedMotion) {
+        if (reducedMotion) return@LaunchedEffect
+        repeat(NOW_PULSES) {
+            pulse.snapTo(0f)
+            pulse.animateTo(1f, tween(1600, easing = LinearOutSlowInEasing))
+            delay(400)
+        }
+    }
     // [holdHeightOf] is the style of the minutes "Now" replaces: an invisible line in it keeps the
     // slot as tall as before, so the card doesn't shrink when the bus arrives.
     Box(modifier.clearAndSetSemantics { contentDescription = "Arriving now" }, contentAlignment = Alignment.CenterStart) {
@@ -199,12 +211,14 @@ fun ArrivingNow(modifier: Modifier = Modifier, fontSize: TextUnit = 19.sp, holdH
             Box(
                 Modifier
                     .size((fontSize.value * 0.3f).coerceAtLeast(6f).dp)
+                    .preferredFrameRate(CALM_FPS)
                     .drawBehind {
-                        val t = pulse?.value ?: return@drawBehind
+                        val t = pulse.value
+                        if (t >= 1f) return@drawBehind
                         drawCircle(accent.copy(alpha = 0.45f * (1 - t)), radius = size.minDimension / 2 * (1 + 1.4f * t))
                     }
                     .graphicsLayer {
-                        val s = 1f + 0.12f * sin(PI * (pulse?.value ?: 0f)).toFloat()
+                        val s = 1f + 0.12f * sin(PI * pulse.value).toFloat()
                         scaleX = s
                         scaleY = s
                     }
@@ -214,6 +228,15 @@ fun ArrivingNow(modifier: Modifier = Modifier, fontSize: TextUnit = 19.sp, holdH
         }
     }
 }
+
+/**
+ * Frame rate for slow, ambient motion (the refresh wave, the "Now" pulse): smooth enough for
+ * gentle movement, and it lets the display drop from 120 Hz. Takes effect on Android 15+.
+ */
+const val CALM_FPS = 30f
+
+/** How many times "Now" pulses when it appears before holding still. */
+private const val NOW_PULSES = 3
 
 /** The Mincho numeral style for minutes, at [fontSize]. */
 fun inkMinutesStyle(fontSize: TextUnit) = TextStyle(fontFamily = Mincho, fontWeight = FontWeight.Black, fontSize = fontSize)

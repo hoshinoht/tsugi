@@ -9,6 +9,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import java.io.File
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sqrt
 
@@ -49,12 +50,7 @@ class StopRepository(
     }
 
     fun nearby(lat: Double, lng: Double, radiusM: Int, limit: Int = 25): List<NearbyStop> =
-        _stops.value.asSequence()
-            .map { NearbyStop(it, distanceM(lat, lng, it.lat, it.lng)) }
-            .filter { it.distanceM <= radiusM }
-            .sortedBy { it.distanceM }
-            .take(limit)
-            .toList()
+        nearbyStops(_stops.value, lat, lng, radiusM, limit)
 
     /** See [searchStops]. */
     fun search(query: String, limit: Int = 50): List<BusStop> = searchStops(_stops.value, query, limit)
@@ -81,6 +77,24 @@ class StopRepository(
         const val MAX_AGE_MS = 7L * 24 * 60 * 60 * 1000
     }
 }
+
+/** The stops within [radiusM] of a point, nearest first. */
+fun nearbyStops(stops: List<BusStop>, lat: Double, lng: Double, radiusM: Int, limit: Int = 25): List<NearbyStop> {
+    // A cheap box check first, so only the handful of stops that could be in range are measured.
+    // The margin keeps it a superset: distances round down to whole metres, so 400.9 m is "400".
+    val dLat = (radiusM * 1.01 + 2) / METRES_PER_DEGREE
+    val dLng = dLat / cos(Math.toRadians(lat))
+    return stops.asSequence()
+        .filter { abs(it.lat - lat) <= dLat && abs(it.lng - lng) <= dLng }
+        .map { NearbyStop(it, distanceM(lat, lng, it.lat, it.lng)) }
+        .filter { it.distanceM <= radiusM }
+        .sortedBy { it.distanceM }
+        .take(limit)
+        .toList()
+}
+
+/** Metres in a degree of latitude (and of longitude at the equator, which Singapore nearly is). */
+private const val METRES_PER_DEGREE = 6_371_000 * Math.PI / 180
 
 /** Equirectangular approximation; accurate to well under 1% at Singapore's scale. */
 fun distanceM(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Int {

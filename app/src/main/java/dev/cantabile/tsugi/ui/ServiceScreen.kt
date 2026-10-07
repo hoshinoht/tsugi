@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -107,7 +108,8 @@ fun ServiceScreen(vm: AppViewModel, serviceNo: String, onBack: () -> Unit, onOpe
         LazyColumn(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = inner.calculateTopPadding(), bottom = inner.calculateBottomPadding() + 24.dp),
-            verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+            // Ink & Paper's route rows are slices of one card, so they sit edge to edge.
+            verticalArrangement = Arrangement.spacedBy(if (ink) 0.dp else ListItemDefaults.SegmentedGap),
         ) {
             item {
                 Column(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -138,40 +140,32 @@ fun ServiceScreen(vm: AppViewModel, serviceNo: String, onBack: () -> Unit, onOpe
             }
             if (route.isEmpty()) item { MessageCard("Route data is still downloading, or this service isn't in LTA's route list.") }
             if (ink && route.isNotEmpty()) {
-                // One bordered card holding the whole line, so the brush runs unbroken from stop to stop.
-                item(key = "route-$direction") {
-                    val fromIndex = route.indexOfFirst { it.stop == fromStop }.takeIf { it >= 0 }
-                    // The ink reaches the nearest bus still on its way to your stop. Opened without a
-                    // stop there's no "your bus", so the whole line is ink and nothing reads as passed.
-                    val busIndex = if (fromIndex == null) route.size else busesAt.keys.filter { it <= fromIndex }.maxOrNull() ?: -1
-                    Surface(
-                        Modifier.padding(horizontal = 4.dp),
-                        shape = RoundedCornerShape(26.dp),
-                        color = colors.surfaceContainer,
-                        border = cardBorder(),
-                    ) {
-                        Column(Modifier.padding(vertical = 12.dp)) {
-                            route.forEachIndexed { i, r ->
-                                val stop = vm.stop(r.stop)
-                                InkRouteStop(
-                                    index = i,
-                                    count = route.size,
-                                    name = stop?.description ?: r.stop,
-                                    // One line: the code and the day's span; the road is on the stop's own screen.
-                                    meta = listOfNotNull(r.stop, r.firstBusLabel(now)?.let { "first $it" }, r.lastBusLabel(now)?.let { "last $it" }).joinToString(" · "),
-                                    mark = when {
-                                        i == fromIndex -> RouteMark.You
-                                        busesAt[i] != null -> RouteMark.Bus
-                                        fromIndex != null && i < busIndex -> RouteMark.Passed
-                                        else -> RouteMark.Ahead
-                                    },
-                                    travelledTo = busIndex,
-                                    buses = busesAt[i].orEmpty(),
-                                    now = clock,
-                                    onClick = { onOpenStop(r.stop) },
-                                )
-                            }
-                        }
+                val fromIndex = route.indexOfFirst { it.stop == fromStop }.takeIf { it >= 0 }
+                // The ink reaches the nearest bus still on its way to your stop. Opened without a
+                // stop there's no "your bus", so the whole line is ink and nothing reads as passed.
+                val busIndex = if (fromIndex == null) route.size else busesAt.keys.filter { it <= fromIndex }.maxOrNull() ?: -1
+                // One item per stop, so a long route builds only the rows on screen; each row draws
+                // its slice of the card and of the brush, so together they read as one unbroken line.
+                itemsIndexed(route, key = { _, r -> "${r.direction}-${r.seq}-${r.stop}" }) { i, r ->
+                    val stop = vm.stop(r.stop)
+                    Box(Modifier.cardSlice(i, route.size)) {
+                        InkRouteStop(
+                            index = i,
+                            count = route.size,
+                            name = stop?.description ?: r.stop,
+                            // One line: the code and the day's span; the road is on the stop's own screen.
+                            meta = listOfNotNull(r.stop, r.firstBusLabel(now)?.let { "first $it" }, r.lastBusLabel(now)?.let { "last $it" }).joinToString(" · "),
+                            mark = when {
+                                i == fromIndex -> RouteMark.You
+                                busesAt[i] != null -> RouteMark.Bus
+                                fromIndex != null && i < busIndex -> RouteMark.Passed
+                                else -> RouteMark.Ahead
+                            },
+                            travelledTo = busIndex,
+                            buses = busesAt[i].orEmpty(),
+                            now = clock,
+                            onClick = { onOpenStop(r.stop) },
+                        )
                     }
                 }
             } else itemsIndexed(route, key = { _, r -> "${r.direction}-${r.seq}-${r.stop}" }) { i, r ->
