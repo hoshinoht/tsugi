@@ -202,6 +202,22 @@ class NextUpTest {
     }
 
     @Test
+    fun staysWithThePreviousPickWhenAnotherIsOnlySlightlySooner() {
+        // Like 39 and 12 both about a minute away: the estimates swap order between refreshes.
+        val both = listOf(NextUpCandidate("B", svc("39", 2), pinned = true), NextUpCandidate("B", svc("12", 1), pinned = true))
+        assertEquals("12", pickNextUp(both, stops::get, null, now)!!.service.serviceNo)
+        assertEquals("39", pickNextUp(both, stops::get, null, now, previous = "B" to "39")!!.service.serviceNo)
+    }
+
+    @Test
+    fun switchesWhenAnotherIsClearlySoonerOrThePreviousIsGone() {
+        val later = listOf(NextUpCandidate("B", svc("39", 9), pinned = true), NextUpCandidate("B", svc("12", 1), pinned = true))
+        assertEquals("12", pickNextUp(later, stops::get, null, now, previous = "B" to "39")!!.service.serviceNo)
+        val gone = listOf(NextUpCandidate("B", svc("12", 1), pinned = true))
+        assertEquals("12", pickNextUp(gone, stops::get, null, now, previous = "B" to "39")!!.service.serviceNo)
+    }
+
+    @Test
     fun fromAcrossTownTheWalkDoesntRuleBusesOut() {
         // ~1.1 km to stop B and no saved stop nearby: B's buses are still candidates, soonest first.
         val pick = pickNextUp(listOf(NextUpCandidate("B", svc("10", 3, 12), pinned = true)), stops::get, here, now)

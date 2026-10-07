@@ -42,6 +42,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -103,12 +104,16 @@ fun FavouritesScreen(
             arrivals[code]?.services.orEmpty().forEach { add(NextUpCandidate(code, it, pinned = false)) }
         }
     }
+    // The last Next up, so it doesn't flip between buses due within a minute of each other.
+    var lastHero by remember { mutableStateOf<Pair<String, String>?>(null) }
     val hero = pickNextUp(
         candidates,
         stopLatLng = { code -> vm.stop(code)?.let { it.lat to it.lng } },
         here = here?.let { it.latitude to it.longitude },
         now = now,
+        previous = lastHero,
     )
+    SideEffect { lastHero = hero?.let { it.stopCode to it.service.serviceNo } }
     // Don't repeat the hero's bus in its stop's pinned group.
     val groups = pinned.filterNot { hero != null && it.stopCode == hero.stopCode && it.serviceNo == hero.service.serviceNo }.groupBy { it.stopCode }
     // Cards in the user's saved order; new cards go after, in the default order.

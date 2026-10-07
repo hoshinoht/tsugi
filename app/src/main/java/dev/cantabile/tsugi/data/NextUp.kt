@@ -19,6 +19,9 @@ const val NEAR_STOP_M = 400
 const val WALK_M_PER_MIN = 80
 private const val DISTANCE_BUCKET_M = 100
 
+/** Another bus has to be at least this much sooner to replace the current Next up. */
+private val STICKY: Duration = Duration.ofMinutes(2)
+
 /**
  * Picks the "Next up" bus:
  * 1. If [here] is known, the nearest saved stop within [NEAR_STOP_M] (in 100 m buckets, so stops at
@@ -31,6 +34,8 @@ fun pickNextUp(
     stopLatLng: (String) -> Pair<Double, Double>?,
     here: Pair<Double, Double>?,
     now: Instant,
+    /** The last pick as (stop code, service number), kept while it's still competitive; see [STICKY]. */
+    previous: Pair<String, String>? = null,
 ): NextUp? {
     val options = candidates.mapNotNull { c ->
         val distance = here?.let { h -> stopLatLng(c.stopCode)?.let { s -> distanceM(h.first, h.second, s.first, s.second) } }
@@ -47,6 +52,16 @@ fun pickNextUp(
     } else {
         options.minWithOrNull(compareBy({ !it.first.pinned }, { it.second.eta }))
     } ?: return null
-    val (candidate, bus, distance) = best
+    // Arrival estimates jitter by tens of seconds each refresh, so two buses a minute apart would keep
+    // swapping places. Stay with the previous pick (same stop group) unless another is clearly sooner.
+    val kept = previous?.let { (stop, service) ->
+        val pool = if (near.isNotEmpty()) near else options
+        pool.firstOrNull { it.first.stopCode == stop && it.first.service.serviceNo == service }
+            ?.takeIf { prev ->
+                (near.isEmpty() || prev.third!! / DISTANCE_BUCKET_M == best.third!! / DISTANCE_BUCKET_M) &&
+                    prev.second.eta.isBefore(best.second.eta.plus(STICKY))
+            }
+    }
+    val (candidate, bus, distance) = kept ?: best
     return NextUp(candidate.stopCode, candidate.service, bus, distance?.takeIf { near.isNotEmpty() })
 }
