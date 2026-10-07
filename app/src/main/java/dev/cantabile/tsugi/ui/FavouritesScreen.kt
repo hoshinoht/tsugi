@@ -781,7 +781,8 @@ private fun NextUpPager(nextUps: List<NextUp>, modifier: Modifier = Modifier, pa
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         HorizontalPager(
             state = state,
-            contentPadding = PaddingValues(end = if (nextUps.size > 1) 28.dp else 0.dp),
+            // Centred, with the neighbouring cards peeking in on either side.
+            contentPadding = PaddingValues(horizontal = if (nextUps.size > 1) 14.dp else 0.dp),
             pageSpacing = 8.dp,
             key = { nextUps[it].stopCode + "/" + nextUps[it].service.serviceNo },
             verticalAlignment = Alignment.Top,
