@@ -23,6 +23,14 @@ import dev.cantabile.tsugi.data.crowdLineOf
 import dev.cantabile.tsugi.data.forecastByStation
 import dev.cantabile.tsugi.data.BusOnRoute
 import dev.cantabile.tsugi.data.BusStop
+import dev.cantabile.tsugi.data.allStopCodes
+import dev.cantabile.tsugi.data.routeChanges
+import dev.cantabile.tsugi.data.roadIncidents
+import dev.cantabile.tsugi.data.approach
+import dev.cantabile.tsugi.data.PlannedBusRouteDto
+import dev.cantabile.tsugi.data.RouteStop
+import dev.cantabile.tsugi.data.RouteChange
+import dev.cantabile.tsugi.data.RoadUpdates
 import dev.cantabile.tsugi.data.locate
 import dev.cantabile.tsugi.data.distanceM
 import dev.cantabile.tsugi.data.stopsAway
@@ -272,6 +280,53 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Keeps the last known status if the call fails, so a flaky network doesn't hide a disruption. */
+    private val _roadUpdates = MutableStateFlow(RoadUpdates())
+    /** Traffic incidents on your saved buses' approach to your stops, and route changes to them. */
+    val roadUpdates: StateFlow<RoadUpdates> = _roadUpdates.asStateFlow()
+    private var plannedFetchedAt = 0L
+    private var routeChanges: List<RouteChange> = emptyList()
+
+    /** Polled with train status. Route changes are checked at most every 12 hours. */
+    suspend fun refreshRoadUpdates() {
+        val routes = c.routes.index.value ?: return
+        val favourites = favourites.value
+        // Service -> the stops it passes on the way to each saved stop.
+        val watched = mutableMapOf<String, MutableList<RouteStop>>()
+        favourites.forEach { f ->
+            val pairs = when (f) {
+                is Favourite.Service -> listOf(f.stopCode to f.serviceNo)
+                else -> f.allStopCodes.flatMap { code -> routes.servicesAt(code).map { code to it } }
+            }
+            pairs.forEach { (code, service) -> watched.getOrPut(service) { mutableListOf() } += routes.approach(code, service) }
+        }
+        val saved = watched.keys
+        if (System.currentTimeMillis() - plannedFetchedAt > PLANNED_EVERY_MS) {
+            runCatching { fetchPlanned() }.onSuccess { planned ->
+                plannedFetchedAt = System.currentTimeMillis()
+                routeChanges = routeChanges(planned, saved)
+                routeChanges.maxOfOrNull { it.effective }?.let { c.routes.refreshIfOlderThan(it) }
+            }
+        }
+        val incidents = runCatching { c.api.trafficIncidents() }.getOrNull()?.value?.map { it.toDomain() }
+        _roadUpdates.value = RoadUpdates(
+            incidents = incidents?.let { roadIncidents(it, watched) { code -> c.stops[code]?.let { s -> s.lat to s.lng } } }
+                ?: _roadUpdates.value.incidents,
+            routeChanges = routeChanges.filter { it.serviceNo in saved },
+        )
+    }
+
+    private suspend fun fetchPlanned(): List<PlannedBusRouteDto> {
+        val all = mutableListOf<PlannedBusRouteDto>()
+        var skip = 0
+        while (true) {
+            val page = c.api.plannedBusRoutes(skip)
+            all += page
+            if (page.size < 500) break
+            skip += 500
+        }
+        return all
+    }
+
     suspend fun refreshTrains() {
         runCatching { c.api.trainServiceAlerts() }.getOrNull()?.let {
             _trainStatus.value = it.value.toDomain(Instant.now())
@@ -513,6 +568,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private companion object {
+        const val PLANNED_EVERY_MS = 12 * 60 * 60_000L
         /** A cached fix younger than this is shown at once while a fresh one is found. */
         const val QUICK_FIX_MAX_AGE_MS = 10 * 60_000L
         /** Leave-now only trusts a position this recent. */

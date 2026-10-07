@@ -27,6 +27,13 @@ class LtaApi(
     suspend fun busServices(skip: Int): List<BusServiceDto> =
         get<BusServicesResponse>("BusServices?\$skip=$skip")?.value.orEmpty()
 
+    /** Road incidents across Singapore (accidents, breakdowns, diversions…); updated about every 2 minutes. */
+    suspend fun trafficIncidents(): TrafficIncidentsResponse? = get("TrafficIncidents")
+
+    /** One page of planned route changes; LTA publishes them on or after the day they take effect. */
+    suspend fun plannedBusRoutes(skip: Int): List<PlannedBusRouteDto> =
+        get<PlannedBusRoutesResponse>("PlannedBusRoutes?\$skip=$skip")?.value.orEmpty()
+
     /** Line status and disruption alerts for the whole MRT/LRT network. */
     suspend fun trainServiceAlerts(): TrainAlertsResponse? = get("TrainServiceAlerts")
 

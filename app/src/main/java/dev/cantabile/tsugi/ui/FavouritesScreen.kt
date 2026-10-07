@@ -166,6 +166,7 @@ fun FavouritesScreen(
                 })
             }
             item(key = "trains") { TrainStatusCard(vm, onOpenStation = onOpenStation) }
+            item(key = "road") { RoadUpdatesCard(vm, Modifier.animateItem()) }
 
             if (loaded && favourites.isEmpty()) {
                 item {

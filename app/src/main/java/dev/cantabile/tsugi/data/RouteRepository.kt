@@ -131,6 +131,19 @@ class RouteRepository(
         }
     }
 
+    /**
+     * Re-downloads the route data if the cached copy predates [changedOn] (a planned route change
+     * for one of your services), so stop lists and "stops away" follow the new route.
+     */
+    suspend fun refreshIfOlderThan(changedOn: java.time.LocalDate) = mutex.withLock {
+        val cachedOn = java.time.Instant.ofEpochMilli(file.lastModified()).atZone(SINGAPORE).toLocalDate()
+        if (file.exists() && !cachedOn.isBefore(changedOn)) return@withLock
+        runCatching { download() }.onSuccess { fresh ->
+            _index.value = RoutesIndex(fresh)
+            withContext(Dispatchers.IO) { file.writeText(json.encodeToString(fresh)) }
+        }
+    }
+
     /** A few pages at a time with retries: firing all ~54 at once gets throttled. */
     private suspend fun download(): List<RouteStop> = coroutineScope {
         val all = mutableListOf<RouteStop>()

@@ -45,6 +45,7 @@ fun PollTrainStatus(vm: AppViewModel) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (isActive) {
                 vm.refreshTrains()
+                vm.refreshRoadUpdates()
                 delay(TRAIN_REFRESH_MS)
             }
         }

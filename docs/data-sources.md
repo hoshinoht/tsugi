@@ -10,6 +10,8 @@ Requires an AccountKey from LTA. Endpoints and fields follow the DataMall API Us
 | `BusStops?$skip=` | All bus stops (code, road, description, coordinates), 500 per page | Ad hoc |
 | `BusRoutes?$skip=` | Every stop on every service, in order, with first and last bus times (weekday, Saturday, Sunday), 500 per page | Ad hoc |
 | `BusServices?$skip=` | Each service direction's category, loop point and frequency in four time bands, 500 per page | Ad hoc |
+| `TrafficIncidents` | Road incidents with type, position and message; the app keeps those within 200 m of a stop on your saved buses' last 15 stops before your stop | About 2 min |
+| `PlannedBusRoutes?$skip=` | Route changes, published on or after the day they take effect; the app notes changes to saved services and refreshes its route cache | Ad hoc |
 | `TrainServiceAlerts` | Line status, affected stations and direction, free bus or shuttle, LTA's message | Ad hoc |
 | `PCDRealTime?TrainLine=` | Platform crowding (low, moderate, high) at every station on a line | 10 min |
 | `PCDForecast?TrainLine=` | Forecast platform crowding in half-hours for today | Daily |
