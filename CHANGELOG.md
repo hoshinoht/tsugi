@@ -24,6 +24,8 @@
 - Screens stack, so stops and stations can open each other; back goes through them in order.
 
 - **Nearby is much faster:** it shows stops at once from the phone's last known position (if under 10 minutes old), then refines with a fresh fix, reshuffling only if you've moved more than 25 m. Location also warms up at launch, and a refresh button in the title spins while locating.
+- **Swipeable Next up:** swipe the card for the next two best buses (same rules: nearest saved stop, pinned first, catchable, soonest). The next card peeks in at the edge, with page dots below.
+- **Sticky Next up:** the card stays on its bus unless another is at least 2 minutes sooner, so buses a minute apart no longer swap back and forth as estimates jitter.
 - **Test disruption alert:** a "Send a test alert" button under Train disruptions in Settings sends LTA's sample disruption through the real notification, so you can check alerts get through.
 - **Leave-now alerts** allow 30% extra for winding streets, and only use a position from the last 3 minutes.
 

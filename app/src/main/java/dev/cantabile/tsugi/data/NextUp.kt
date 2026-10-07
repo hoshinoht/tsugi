@@ -23,20 +23,23 @@ private const val DISTANCE_BUCKET_M = 100
 private val STICKY: Duration = Duration.ofMinutes(2)
 
 /**
- * Picks the "Next up" bus:
+ * The best buses to show on the Next up card, best first (at most [limit], one per stop and service):
  * 1. If [here] is known, the nearest saved stop within [NEAR_STOP_M] (in 100 m buckets, so stops at
- *    the same junction tie), preferring pinned buses, then the soonest catchable bus.
- * 2. Otherwise, the soonest catchable bus across all saved stops.
- * A bus is catchable if it arrives no earlier than the walk to its stop (~80 m/min).
+ *    the same junction tie), preferring pinned buses, then the soonest catchable bus; then other stops.
+ * 2. Otherwise, pinned buses first, then the soonest catchable bus across all saved stops.
+ * A bus is catchable if it arrives no earlier than the walk to its stop (~80 m/min); only stops you
+ * could walk to (within [NEAR_STOP_M]) count the walk. The first entry is sticky: [previous] keeps its
+ * place while still coming, unless another bus is at least [STICKY] sooner.
  */
-fun pickNextUp(
+fun rankNextUp(
     candidates: List<NextUpCandidate>,
     stopLatLng: (String) -> Pair<Double, Double>?,
     here: Pair<Double, Double>?,
     now: Instant,
-    /** The last pick as (stop code, service number), kept while it's still competitive; see [STICKY]. */
+    /** The last first pick as (stop code, service number). */
     previous: Pair<String, String>? = null,
-): NextUp? {
+    limit: Int = 3,
+): List<NextUp> {
     val options = candidates.mapNotNull { c ->
         val distance = here?.let { h -> stopLatLng(c.stopCode)?.let { s -> distanceM(h.first, h.second, s.first, s.second) } }
         // Only stops you could walk to count the walk; from further away (e.g. across town) any
@@ -44,24 +47,39 @@ fun pickNextUp(
         val walkable = distance?.takeIf { it <= NEAR_STOP_M } ?: 0
         val walk = Duration.ofSeconds(walkable * 60L / WALK_M_PER_MIN)
         val bus = c.service.buses.firstOrNull { !it.eta.isBefore(now.plus(walk)) } ?: return@mapNotNull null
-        Triple(c, bus, distance)
-    }
-    val near = options.filter { (_, _, d) -> d != null && d <= NEAR_STOP_M }
-    val best = if (near.isNotEmpty()) {
-        near.minWith(compareBy<Triple<NextUpCandidate, Bus, Int?>>({ it.third!! / DISTANCE_BUCKET_M }, { !it.first.pinned }, { it.second.eta }))
-    } else {
-        options.minWithOrNull(compareBy({ !it.first.pinned }, { it.second.eta }))
-    } ?: return null
+        Option(c, bus, distance?.takeIf { it <= NEAR_STOP_M })
+    }.distinctBy { it.candidate.stopCode to it.candidate.service.serviceNo }
+    val nearFirst = options.any { it.nearDistance != null }
+    val ranked = options.sortedWith(
+        compareBy<Option>(
+            { if (nearFirst) (it.nearDistance?.div(DISTANCE_BUCKET_M) ?: Int.MAX_VALUE) else 0 },
+            { !it.candidate.pinned },
+            { it.bus.eta },
+        ),
+    )
+    val best = ranked.firstOrNull() ?: return emptyList()
     // Arrival estimates jitter by tens of seconds each refresh, so two buses a minute apart would keep
     // swapping places. Stay with the previous pick (same stop group) unless another is clearly sooner.
     val kept = previous?.let { (stop, service) ->
-        val pool = if (near.isNotEmpty()) near else options
-        pool.firstOrNull { it.first.stopCode == stop && it.first.service.serviceNo == service }
+        ranked.firstOrNull { it.candidate.stopCode == stop && it.candidate.service.serviceNo == service }
             ?.takeIf { prev ->
-                (near.isEmpty() || prev.third!! / DISTANCE_BUCKET_M == best.third!! / DISTANCE_BUCKET_M) &&
-                    prev.second.eta.isBefore(best.second.eta.plus(STICKY))
+                prev.nearDistance?.div(DISTANCE_BUCKET_M) == best.nearDistance?.div(DISTANCE_BUCKET_M) &&
+                    prev.bus.eta.isBefore(best.bus.eta.plus(STICKY))
             }
     }
-    val (candidate, bus, distance) = kept ?: best
-    return NextUp(candidate.stopCode, candidate.service, bus, distance?.takeIf { near.isNotEmpty() })
+    val first = kept ?: best
+    return (listOf(first) + (ranked - first)).take(limit).map {
+        NextUp(it.candidate.stopCode, it.candidate.service, it.bus, it.nearDistance.takeIf { _ -> nearFirst })
+    }
 }
+
+/** The single best bus; see [rankNextUp]. */
+fun pickNextUp(
+    candidates: List<NextUpCandidate>,
+    stopLatLng: (String) -> Pair<Double, Double>?,
+    here: Pair<Double, Double>?,
+    now: Instant,
+    previous: Pair<String, String>? = null,
+): NextUp? = rankNextUp(candidates, stopLatLng, here, now, previous, limit = 1).firstOrNull()
+
+private data class Option(val candidate: NextUpCandidate, val bus: Bus, val nearDistance: Int?)

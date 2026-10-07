@@ -7,6 +7,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.size
@@ -64,7 +67,7 @@ import dev.cantabile.tsugi.tracking.Tracked
 import dev.cantabile.tsugi.data.NextUp
 import dev.cantabile.tsugi.data.NextUpCandidate
 import dev.cantabile.tsugi.data.labelMinutes
-import dev.cantabile.tsugi.data.pickNextUp
+import dev.cantabile.tsugi.data.rankNextUp
 import dev.cantabile.tsugi.data.allStopCodes
 import dev.cantabile.tsugi.data.ServiceArrivals
 import java.time.Instant
@@ -106,13 +109,15 @@ fun FavouritesScreen(
     }
     // The last Next up, so it doesn't flip between buses due within a minute of each other.
     var lastHero by remember { mutableStateOf<Pair<String, String>?>(null) }
-    val hero = pickNextUp(
+    // Up to three buses to swipe through; the first is the sticky Next up.
+    val nextUps = rankNextUp(
         candidates,
         stopLatLng = { code -> vm.stop(code)?.let { it.lat to it.lng } },
         here = here?.let { it.latitude to it.longitude },
         now = now,
         previous = lastHero,
     )
+    val hero = nextUps.firstOrNull()
     SideEffect { lastHero = hero?.let { it.stopCode to it.service.serviceNo } }
     // Don't repeat the hero's bus in its stop's pinned group.
     val groups = pinned.filterNot { hero != null && it.stopCode == hero.stopCode && it.serviceNo == hero.service.serviceNo }.groupBy { it.stopCode }
@@ -196,15 +201,16 @@ fun FavouritesScreen(
                 }
             }
 
-            if (hero != null) {
+            if (nextUps.isNotEmpty()) {
                 item(key = "hero") {
-                    HeroCard(
-                        vm, hero, now,
-                        onClick = { onOpenStop(hero.stopCode) },
-                        tracking = tracking.tracked == Tracked(hero.stopCode, hero.service.serviceNo),
-                        onToggleTracking = { tracking.toggle(hero.stopCode, hero.service.serviceNo) },
-                        modifier = Modifier.animateItem(),
-                    )
+                    NextUpPager(nextUps, Modifier.animateItem()) { nextUp ->
+                        HeroCard(
+                            vm, nextUp, now,
+                            onClick = { onOpenStop(nextUp.stopCode) },
+                            tracking = tracking.tracked == Tracked(nextUp.stopCode, nextUp.service.serviceNo),
+                            onToggleTracking = { tracking.toggle(nextUp.stopCode, nextUp.service.serviceNo) },
+                        )
+                    }
                 }
             }
 
@@ -311,11 +317,17 @@ private fun HeroCard(
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 LoadBars(next.load, colors.onPrimaryContainer)
-                Text(listOf(next.load.label, next.type.label.let { if (it.isEmpty()) it else "$it deck" }).filter { it.isNotEmpty() }.joinToString(" · "), style = MaterialTheme.typography.labelLarge)
-                Spacer(Modifier.weight(1f))
+                // On a narrow (swipeable) card this label gives way first, so the times and bell always fit.
+                Text(
+                    listOf(next.load.label, next.type.label.let { if (it.isEmpty()) it else "$it deck" }).filter { it.isNotEmpty() }.joinToString(" · "),
+                    style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
                 val later = service.buses.dropWhile { it != next }.drop(1).map { minutesUntil(it.eta, now) }
                 if (later.isNotEmpty()) {
-                    Text("then ${later.joinToString(" · ")} min", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                    Text("then ${later.joinToString(" · ")} min", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
                 }
                 FilledIconToggleButton(
                     checked = tracking,
@@ -562,6 +574,38 @@ private fun PlaceCard(place: Favourite.Place, board: List<Pair<String, ServiceAr
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     next.forEach { (_, s) -> MiniTile(s, now, Modifier.weight(1f)) }
                     repeat(4 - next.size) { Box(Modifier.weight(1f)) }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The Next up card, swipeable through up to three buses. The next card peeks in at the edge and dots
+ * show where you are. Pages are keyed by stop and service, so a reorder doesn't jump to another bus.
+ */
+@Composable
+private fun NextUpPager(nextUps: List<NextUp>, modifier: Modifier = Modifier, page: @Composable (NextUp) -> Unit) {
+    val state = rememberPagerState { nextUps.size }
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        HorizontalPager(
+            state = state,
+            contentPadding = PaddingValues(end = if (nextUps.size > 1) 28.dp else 0.dp),
+            pageSpacing = 8.dp,
+            key = { nextUps[it].stopCode + "/" + nextUps[it].service.serviceNo },
+            verticalAlignment = Alignment.Top,
+        ) { index -> page(nextUps[index]) }
+        if (nextUps.size > 1) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                repeat(nextUps.size) { i ->
+                    val selected = i == state.currentPage
+                    val width by animateDpAsState(if (selected) 18.dp else 6.dp, MaterialTheme.motionScheme.fastSpatialSpec(), label = "dot")
+                    Box(
+                        Modifier
+                            .size(width = width, height = 6.dp)
+                            .clip(CircleShape)
+                            .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+                    )
                 }
             }
         }
