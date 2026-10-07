@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ink and Paper Night</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@6..144,400..800&amp;family=Zen+Old+Mincho:wght@600;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#E0573F}a:hover{color:#F07A63}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; position: relative; overflow: hidden; background: #14171E; color: #ECE5D6; font-family: 'Google Sans Flex', system-ui, sans-serif; display: flex; flex-direction: column;">
+
+  <svg aria-hidden="true" width="390" height="220" viewBox="0 0 390 220" style="position: absolute; top: 0; left: 0; opacity: 0.5;">
+    <circle cx="330" cy="58" r="26" fill="#ECE5D6" opacity="0.10"></circle>
+    <circle cx="330" cy="58" r="14" fill="#ECE5D6" opacity="0.18"></circle>
+  </svg>
+
+  <header style="position: relative; display: flex; align-items: center; justify-content: space-between; padding: 26px 16px 10px 20px;">
+    <span style="display: flex; flex-direction: column;">
+      <span style="font-family: 'Zen Old Mincho', serif; font-size: 32px; font-weight: 900;">Favourites</span>
+      <span style="font-size: 12px; letter-spacing: 2px; color: #9AA0AE;">夜 · LAST BUSES SOON</span>
+    </span>
+    <button aria-label="Settings" style="width: 44px; height: 44px; border: 1px solid #2C3240; border-radius: 22px; background: #1D222C; color: #9AA0AE; display: flex; align-items: center; justify-content: center;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h9M19 7h1M4 17h3M13 17h7"></path><circle cx="16" cy="7" r="2.5"></circle><circle cx="10" cy="17" r="2.5"></circle></svg>
+    </button>
+  </header>
+
+  <main style="position: relative; flex: 1; display: flex; flex-direction: column; gap: 14px; padding: 4px 16px 120px 16px;">
+    <section aria-label="Next bus" style="position: relative; border-radius: 26px; background: #1D222C; border: 1px solid #2C3240; padding: 18px 18px 16px 18px; display: flex; flex-direction: column; gap: 12px;">
+      <span style="font-size: 12px; letter-spacing: 2px; color: #9AA0AE;">NEXT · 110 M AWAY</span>
+      <div style="display: flex; align-items: center; gap: 16px;">
+        <span style="position: relative; width: 72px; height: 72px; flex-shrink: 0;">
+          <svg width="72" height="72" viewBox="0 0 116 116" aria-hidden="true" style="position: absolute; inset: 0;"><path d="{{cookie}}" fill="#8C9BD6"></path></svg>
+          <span style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #14171E; font-size: 26px; font-weight: 800;">61</span>
+        </span>
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-size: 20px; font-weight: 700;">Eunos Int</span>
+          <span style="font-size: 13px; color: #9AA0AE;">Last bus 11:42 pm · 2 stops away</span>
+        </div>
+      </div>
+      <div style="display: flex; align-items: baseline; gap: 6px; border-top: 1px solid #2C3240; padding-top: 10px;">
+        <span style="font-family: 'Zen Old Mincho', serif; font-weight: 900; font-size: 56px; line-height: 56px;">3</span>
+        <span style="font-size: 16px; font-weight: 600; color: #9AA0AE;">min</span>
+        <span style="flex: 1;"></span>
+        <span style="font-size: 14px; color: #9AA0AE;">then 24 min · last</span>
+      </div>
+    </section>
+
+    <div style="display: flex; align-items: center; gap: 8px; padding: 0 6px; font-size: 13px; color: #9AA0AE;">
+      <span style="width: 8px; height: 8px; border-radius: 4px; background: #7FB894;"></span>Trains running · last trains from 11:30 pm
+    </div>
+
+    <section aria-label="Bugis Stn Exit A" style="display: flex; flex-direction: column; gap: 6px;">
+      <span style="font-family: 'Zen Old Mincho', serif; font-weight: 900; font-size: 18px; padding: 0 6px;">Bugis Stn Exit A</span>
+      <sc-for list="{{rows}}" as="r" hint-placeholder-count="3">
+        <div style="display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 8px 14px 8px 10px; border-radius: 20px; background: #1D222C; border: 1px solid #2C3240; opacity: {{r.op}};">
+          <span style="min-width: 48px; height: 40px; border-radius: 14px; background: #262C3A; color: #C3CBEB; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 800;">{{r.svc}}</span>
+          <span style="flex: 1; display: flex; flex-direction: column;">
+            <span style="font-size: 15px; font-weight: 600;">{{r.dest}}</span>
+            <span style="font-size: 12px; color: #9AA0AE;">{{r.meta}}</span>
+          </span>
+          <sc-if value="{{r.arr}}" hint-placeholder-val="{{false}}">
+            <span style="display: inline-flex; align-items: center; gap: 6px; color: {{stamp}};" aria-label="Arriving now"><span style="width: 8px; height: 8px; border-radius: 4px; background: {{stamp}};"></span><span style="font-family: 'Zen Old Mincho', serif; font-weight: 900; font-size: 22px;">Now</span></span>
+          </sc-if>
+          <sc-if value="{{r.notArr}}" hint-placeholder-val="{{true}}">
+            <span style="font-family: 'Zen Old Mincho', serif; font-weight: 900; font-size: 22px;">{{r.mins}}</span>
+          </sc-if>
+        </div>
+      </sc-for>
+    </section>
+  </main>
+
+  <nav aria-label="Primary" style="position: absolute; left: 0; right: 0; bottom: 22px; display: flex; justify-content: center;">
+    <div style="display: flex; padding: 6px; border-radius: 30px; background: #ECE5D6; box-shadow: 0 8px 24px rgba(0,0,0,0.4);">
+      <a href="B-Yoru.dc.html" aria-current="page" style="width: 104px; height: 46px; border-radius: 23px; background: #14171E; color: #ECE5D6; display: flex; align-items: center; justify-content: center; text-decoration: none; font-weight: 700; font-size: 14px;">Saved</a>
+      <a href="B-Nearby.dc.html" style="width: 104px; height: 46px; border-radius: 23px; color: #3A4152; display: flex; align-items: center; justify-content: center; text-decoration: none; font-weight: 600; font-size: 14px;">Nearby</a>
+      <a href="B-Stop.dc.html" style="width: 104px; height: 46px; border-radius: 23px; color: #3A4152; display: flex; align-items: center; justify-content: center; text-decoration: none; font-weight: 600; font-size: 14px;">Search</a>
+    </div>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"stamp":{"editor":"color","default":"#E0573F","options":["#E0573F","#E8A33D","#8C9BD6"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    let d = '';
+    for (let i = 0; i <= 180; i++) {
+      const a = (i / 180) * Math.PI * 2 - Math.PI / 2;
+      const r = 52 + 4 * Math.cos(9 * a);
+      d += (i ? 'L' : 'M') + (58 + r * Math.cos(a)).toFixed(2) + ' ' + (58 + r * Math.sin(a)).toFixed(2);
+    }
+    const row = (svc, dest, meta, mins, done) => ({ svc, dest, meta, mins, arr: mins === 'arr', notArr: mins !== 'arr', op: done ? 0.45 : 1 });
+    return {
+      stamp: this.props.stamp ?? '#E0573F',
+      cookie: d + 'Z',
+      rows: [
+        row('32', 'Bedok Int', 'Last bus · seats', 'arr'),
+        row('33', 'Bedok Int', 'Then 18 min · last', '4 min'),
+        row('2', 'Changi Village Ter', 'Service ended for today', '—', true)
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
