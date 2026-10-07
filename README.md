@@ -6,7 +6,7 @@
 
 *Native Kotlin and Material 3 Expressive, built on LTA DataMall for a phone you sideload it to.*
 
-[![Version](https://img.shields.io/badge/version-0.3.0-orange)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.0-orange)](CHANGELOG.md)
 [![Android](https://img.shields.io/badge/Android-12%2B-3DDC84?logo=android&logoColor=white)](app/build.gradle.kts)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.4.20-7F52FF?logo=kotlin&logoColor=white)](gradle/libs.versions.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -20,7 +20,7 @@
 > It reads LTA's live data directly. Journey planning, turn-by-turn navigation and its own arrival predictions are left to other apps.
 
 > [!NOTE]
-> **Pre-1.0 (`0.3.0`).** Built for personal sideloading, not the Play Store. It uses Material 3 Expressive alpha APIs (`1.5.0-alpha29`), so the UI layer may change with library updates. See the [changelog](CHANGELOG.md).
+> **Pre-1.0 (`0.4.0`).** Built for personal sideloading, not the Play Store. It uses Material 3 Expressive alpha APIs (`1.5.0-alpha29`), so the UI layer may change with library updates. See the [changelog](CHANGELOG.md).
 
 ## At a glance
 
@@ -30,25 +30,30 @@
 | **Data** | LTA DataMall (bus arrivals, stops, routes and services; train alerts, station crowding, lift maintenance) · OneMap (address search, static maps) · bundled MRT/LRT stations |
 | **Platforms** | Android 12+ (minSdk 31, target 37) · Live Updates on Android 16 QPR2+ |
 | **Extras** | Configurable home-screen widget · Quick Settings tile · launcher shortcuts for saved stops · disruption notifications |
-| **Size** | About 4.5 MB release APK (R8 shrinking) |
+| **Size** | About 4.8 MB release APK (R8 shrinking) |
 | **Stack** | Kotlin 2.4 · Jetpack Compose · Material 3 Expressive · Glance · OkHttp · DataStore |
 
 ## Screenshots
 
 <table>
   <tr>
-    <td align="center"><img src="docs/images/stop.png" alt="Stop screen: live arrivals with crowding and deck type, a map of the stop, and the stop across the road" width="200"><br><sub>Stop: arrivals, map, across the road</sub></td>
-    <td align="center"><img src="docs/images/station.png" alt="Bugis MRT station: platform crowding forecast, lift status and bus stops at the exits" width="200"><br><sub>Station: crowding, lifts, exits</sub></td>
-    <td align="center"><img src="docs/images/nearby.png" alt="Nearby stops around ION Orchard with live arrivals and first-bus times" width="200"><br><sub>Nearby, around a searched place</sub></td>
+    <td align="center"><img src="docs/images/stop.png" alt="Bugis Stn Exit A in the Ai colourway: the stop name in Mincho, live arrivals with a vermilion Now, a map and the stop across the road" width="200"><br><sub>Stop: arrivals, map, across the road</sub></td>
+    <td align="center"><img src="docs/images/route.png" alt="Bus 32's route as a brush line: ink up to the bus, Bugis Stn Exit A marked in vermilion with the bus arriving now, a pale wash after it" width="200"><br><sub>Route: a brush line through the stops</sub></td>
+    <td align="center"><img src="docs/images/stop-dark.png" alt="The same stop at night on Sumi paper" width="200"><br><sub>Night, on Sumi paper</sub></td>
   </tr>
   <tr>
+    <td align="center"><img src="docs/images/station.png" alt="Bugis MRT station: platform crowding forecast, lift status and bus stops at the exits" width="200"><br><sub>Station: crowding, lifts, exits</sub></td>
+    <td align="center"><img src="docs/images/nearby.png" alt="Nearby stops around ION Orchard with live arrivals and first-bus times" width="200"><br><sub>Nearby, around a searched place</sub></td>
     <td align="center"><img src="docs/images/search.png" alt="Search results for Bugis: an MRT station, places and bus stops" width="200"><br><sub>Search: stations, places, stops</sub></td>
-    <td align="center"><img src="docs/images/route.png" alt="Bus 32's route with direction toggle and first and last bus at each stop" width="200"><br><sub>Route: stops in order</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/images/theme.png" alt="Settings: light, dark or system, and a gallery of colourways: Ai, Matcha, Sakura, Fuji, Kaki and Wallpaper" width="200"><br><sub>Theme: five colourways or Wallpaper</sub></td>
+    <td></td>
     <td></td>
   </tr>
 </table>
 
-*Taken on a Galaxy S25+ in dark mode with live LTA data; colours follow the wallpaper.*
+*Taken on a Galaxy S25+ with live LTA data, in the 藍 Ai colourway.*
 
 ## Features
 

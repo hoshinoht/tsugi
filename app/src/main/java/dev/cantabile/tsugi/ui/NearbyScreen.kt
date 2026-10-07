@@ -43,6 +43,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import dev.cantabile.tsugi.ui.theme.TsugiTheme
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.cantabile.tsugi.R
 import dev.cantabile.tsugi.data.compactFirstBus
@@ -166,6 +168,7 @@ private fun NearbyStopCard(
     onOpen: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
+    val ink = TsugiTheme.isInk
     val walkMin = (nearby.distanceM / 80).coerceAtLeast(1) // ~4.8 km/h
     Surface(
         onClick = onToggle,
@@ -213,23 +216,25 @@ private fun NearbyStopCard(
                             row.forEach { s ->
                                 val first = s.buses.firstOrNull()
                                 val arriving = first != null && minutesUntil(first.eta, now) < 1
+                                // Ink & Paper keeps the tile on paper and marks an arriving bus with "Now".
+                                val filled = arriving && !ink
                                 Surface(
                                     onClick = onOpen,
                                     modifier = Modifier.weight(1f).fillMaxHeight(),
                                     shape = RoundedCornerShape(18.dp),
-                                    color = if (arriving) colors.primaryContainer else colors.surface,
-                                    contentColor = if (arriving) colors.onPrimaryContainer else colors.onSurface,
+                                    color = if (filled) colors.primaryContainer else colors.surface,
+                                    contentColor = if (filled) colors.onPrimaryContainer else colors.onSurface,
                                 ) {
                                     Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
                                         Text(s.serviceNo, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                        Text(
+                                        if (arriving && ink) ArrivingNow(fontSize = 15.sp, holdHeightOf = MaterialTheme.typography.labelLarge) else Text(
                                             when {
                                                 first == null -> s.firstBus?.let(::compactFirstBus) ?: "Not running"
                                                 arriving -> "Arriving"
                                                 else -> "${minutesUntil(first.eta, now)} min"
                                             },
                                             style = MaterialTheme.typography.labelLarge,
-                                            color = if (arriving) colors.onPrimaryContainer else colors.onSurfaceVariant,
+                                            color = if (filled) colors.onPrimaryContainer else colors.onSurfaceVariant,
                                             maxLines = 1,
                                         )
                                     }

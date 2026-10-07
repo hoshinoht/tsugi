@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
 ### Added
 
@@ -12,6 +12,18 @@
 ### Changed
 
 - New installs start on Ai. Existing installs keep Wallpaper until changed in Settings.
+- **Stop screen idles while you wait:** the refresh bar is flat and steps once a second, cards update every 5 seconds, and "Now" pulses three times and then holds still. Left open at a stop, the screen draws about 2 frames a second instead of 120.
+- The Next up card is centred, with the next and previous buses peeking in on either side.
+
+### Fixed
+
+- Nearby's tiles show a bus arriving now the Ink & Paper way, with "Now", instead of a filled "Arriving" tile.
+
+### Performance
+
+- Long routes build only the stops on screen.
+- Nearby lookups check a small area first instead of measuring every stop in Singapore.
+- "Stops away" is worked out when a bus moves, not on every tick.
 
 ## 0.3.0
 
