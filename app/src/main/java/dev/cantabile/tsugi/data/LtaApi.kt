@@ -16,7 +16,8 @@ class LtaApi(
 
     /** Returns null when LTA sends an empty body (no buses on the road, or maintenance). */
     suspend fun busArrival(stopCode: String): BusArrivalResponse? =
-        get("v3/BusArrival?BusStopCode=$stopCode")
+        // Stop codes can arrive in intents from other apps, so only ever send a 5-digit code.
+        if (!stopCode.matches(STOP_CODE)) null else get("v3/BusArrival?BusStopCode=$stopCode")
 
     /** One page of up to 500 route stops (every stop on every service). */
     suspend fun busRoutes(skip: Int): List<BusRouteDto> =
@@ -60,6 +61,7 @@ class LtaApi(
     }
 
     private companion object {
+        val STOP_CODE = Regex("^\\d{5}$")
         const val BASE_URL = "https://datamall2.mytransport.sg/ltaodataservice/"
     }
 }

@@ -79,10 +79,15 @@ class WidgetConfigActivity : ComponentActivity() {
                 }
                 ConfigScreen(choices, onCancel = ::finish) { choice ->
                     scope.launch {
-                        val glanceId = GlanceAppWidgetManager(this@WidgetConfigActivity).getGlanceIdBy(widgetId)
-                        updateAppWidgetState(this@WidgetConfigActivity, glanceId) { it[WIDGET_TARGET] = choice.target }
-                        FavouritesWidget().update(this@WidgetConfigActivity, glanceId)
-                        setResult(RESULT_OK, result)
+                        // Only configure our own widgets; anything else (this activity is exported) just closes.
+                        val ours = AppWidgetManager.getInstance(this@WidgetConfigActivity).getAppWidgetInfo(widgetId)?.provider?.className ==
+                            FavouritesWidgetReceiver::class.java.name
+                        val glanceId = if (ours) runCatching { GlanceAppWidgetManager(this@WidgetConfigActivity).getGlanceIdBy(widgetId) }.getOrNull() else null
+                        if (glanceId != null) {
+                            updateAppWidgetState(this@WidgetConfigActivity, glanceId) { it[WIDGET_TARGET] = choice.target }
+                            FavouritesWidget().update(this@WidgetConfigActivity, glanceId)
+                            setResult(RESULT_OK, result)
+                        }
                         finish()
                     }
                 }

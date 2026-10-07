@@ -34,6 +34,11 @@ object Shortcuts {
     }
 
     /** Asks the launcher to pin a shortcut to [code]; false if it can't. */
+    /** Greys out a shortcut (including pinned ones) whose target no longer exists. */
+    fun disable(context: Context, id: String) {
+        runCatching { context.getSystemService(ShortcutManager::class.java).disableShortcuts(listOf(id), "No longer saved") }
+    }
+
     fun pinStop(context: Context, code: String, name: String): Boolean {
         val manager = context.getSystemService(ShortcutManager::class.java)
         if (!manager.isRequestPinShortcutSupported) return false

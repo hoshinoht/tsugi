@@ -50,6 +50,7 @@ import dev.cantabile.tsugi.MainActivity
 import dev.cantabile.tsugi.R
 import dev.cantabile.tsugi.TsugiApplication
 import dev.cantabile.tsugi.data.Favourite
+import dev.cantabile.tsugi.data.SINGAPORE
 import dev.cantabile.tsugi.data.ServiceArrivals
 import dev.cantabile.tsugi.data.firstBusLabel
 import dev.cantabile.tsugi.data.labelMinutes
@@ -178,7 +179,7 @@ class FavouritesWidget : GlanceAppWidget() {
                     .mapNotNull { r -> r.firstBusLabel()?.let { label -> labelMinutes(label)?.let { Triple(it, label, r.service) } } }
             }?.minByOrNull { it.first }?.let { (_, label, service) -> "No buses running · first bus $label ($service)" }
         } else null
-        val updated = DateTimeFormatter.ofPattern("H:mm").withZone(ZoneId.systemDefault()).format(now)
+        val updated = DateTimeFormatter.ofPattern("H:mm").withZone(SINGAPORE).format(now)
 
         return WidgetData(title, rows, if (failed) "Offline · $updated" else "Updated $updated", favourites.isEmpty(), firstBus, open)
     }

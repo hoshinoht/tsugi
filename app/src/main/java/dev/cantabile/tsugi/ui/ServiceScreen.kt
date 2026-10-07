@@ -37,6 +37,7 @@ import dev.cantabile.tsugi.R
 import dev.cantabile.tsugi.data.SINGAPORE
 import dev.cantabile.tsugi.data.categoryLabel
 import dev.cantabile.tsugi.data.firstBusLabel
+import dev.cantabile.tsugi.data.dayType
 import dev.cantabile.tsugi.data.frequencyAt
 import dev.cantabile.tsugi.data.lastBusLabel
 import dev.cantabile.tsugi.data.operatorName
@@ -103,7 +104,7 @@ fun ServiceScreen(vm: AppViewModel, serviceNo: String, onBack: () -> Unit, onOpe
                             color = colors.onSurfaceVariant,
                         )
                         val running = listOfNotNull(
-                            info?.frequencyAt(now.toLocalTime())?.replaceFirstChar { it.uppercase() },
+                            info?.frequencyAt(now.toLocalTime(), dayType(now.toLocalDate()))?.replaceFirstChar { it.uppercase() },
                             info?.loop?.takeIf { it.isNotBlank() }?.let { "loops at $it" },
                         )
                         if (running.isNotEmpty()) {

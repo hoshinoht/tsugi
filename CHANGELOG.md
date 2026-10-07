@@ -23,6 +23,21 @@
 - Tap a bus number on a stop to open its route, with your stop highlighted and the next buses marked where they are. Route stops show first and last buses.
 - Screens stack, so stops and stations can open each other; back goes through them in order.
 
+- **Nearby is much faster:** it shows stops at once from the phone's last known position (if under 10 minutes old), then refines with a fresh fix, reshuffling only if you've moved more than 25 m. Location also warms up at launch, and a refresh button in the title spins while locating.
+- **Leave-now alerts** allow 30% extra for winding streets, and only use a position from the last 3 minutes.
+
+### Fixed
+
+- "Stops away" was wrong on loop and out-and-back routes: it could snap a bus to the stop on the other side of the road. It now walks back from your stop to the bus.
+- The widget setup screen could crash when opened with a widget id that isn't Tsugi's.
+- No more "Trains back to normal" alert just because you unsaved the stops near a disrupted line.
+- The disruption headline counts lines, not segments: one line in both directions no longer reads "2 lines disrupted".
+- Night-service last buses are matched to the right day (the service day now starts at 5 am).
+- Bus frequencies are marked "on weekdays" on other days, since LTA only publishes weekday figures.
+- Pinned shortcuts to a deleted place are disabled.
+- Only 5-digit stop codes are sent to LTA, and the widget's clock uses Singapore time.
+- "1 stop within 200 m", not "1 stops".
+
 ## 0.2.0
 
 ### Added

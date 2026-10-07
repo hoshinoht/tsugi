@@ -30,6 +30,21 @@ class StopsAwayTest {
     }
 
     @Test
+    fun outAndBackRoutesDontSnapToTheOtherSideOfTheRoad() {
+        // Out along one side of a road (A-E), back along the other (e-a), ~33 m apart.
+        val sides = mapOf(
+            "A" to (1.3000 to 103.8000), "B" to (1.3010 to 103.8000), "C" to (1.3020 to 103.8000),
+            "D" to (1.3030 to 103.8000), "E" to (1.3040 to 103.8000),
+            "e" to (1.3040 to 103.8003), "d" to (1.3030 to 103.8003), "c" to (1.3020 to 103.8003),
+            "b" to (1.3010 to 103.8003), "a" to (1.3000 to 103.8003),
+        )
+        val outAndBack = RoutesIndex(listOf("A", "B", "C", "D", "E", "e", "d", "c", "b", "a").mapIndexed { i, c -> stop(i + 1, c) })
+        // On the way back, at "d", but its reported position is a little nearer the outbound "D".
+        val bus = Bus(Instant.EPOCH, true, Load.Seats, BusType.Single, true, "a", lat = 1.3030, lng = 103.80013)
+        assertEquals(2, outAndBack.stopsAway("b", "10", bus, sides::get))
+    }
+
+    @Test
     fun unknownWhenNoPositionOrFarOffRoute() {
         assertNull(routes.stopsAway("D", "10", bus(null), coords::get))
         assertNull(routes.stopsAway("D", "10", bus(1.3200), coords::get))
@@ -74,11 +89,12 @@ class StopsAwayTest {
 
 class LeaveNowTest {
     @Test
-    fun walkMinutesRoundUp() {
+    fun walkMinutesRoundUpAndAllowForWindingStreets() {
         assertEquals(0, walkMinutes(null))
         assertEquals(0, walkMinutes(40))
-        assertEquals(1, walkMinutes(80))
-        assertEquals(4, walkMinutes(250))
+        assertEquals(2, walkMinutes(80)) // 80 m straight line ~ 104 m walked
+        assertEquals(5, walkMinutes(250)) // ~ 325 m walked
+        assertEquals(7, walkMinutes(400)) // ~ 520 m walked
     }
 
     @Test

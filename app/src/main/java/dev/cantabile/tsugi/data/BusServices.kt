@@ -76,7 +76,9 @@ fun frequencyLabel(raw: String): String? {
     }
 }
 
-fun ServiceInfo.frequencyAt(time: LocalTime): String? = freq.getOrNull(frequencyBand(time))?.let(::frequencyLabel)
+/** LTA publishes weekday frequencies only, so other days are labelled as such. */
+fun ServiceInfo.frequencyAt(time: LocalTime, day: DayType = DayType.Weekday): String? =
+    freq.getOrNull(frequencyBand(time))?.let(::frequencyLabel)?.let { if (day == DayType.Weekday) it else "$it on weekdays" }
 
 /** "TRUNK" → "Trunk"; "FLAT FEE $1.10" stays as written apart from case. */
 fun categoryLabel(category: String): String? =

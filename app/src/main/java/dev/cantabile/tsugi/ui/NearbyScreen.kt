@@ -1,6 +1,13 @@
 package dev.cantabile.tsugi.ui
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.draw.rotate
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.TextButton
@@ -91,11 +98,15 @@ fun NearbyScreen(
                     subtitle = ready?.let {
                         listOfNotNull(
                             it.label?.let { l -> "Near $l" },
-                            "${it.stops.size} stops within $radius m",
+                            "${it.stops.size} stop${if (it.stops.size == 1) "" else "s"} within $radius m",
                             "approximate location".takeIf { _ -> !it.precise },
+                            "updating location…".takeIf { _ -> it.refining },
                         ).joinToString(" · ")
                     },
-                    trailing = { SettingsButton(onOpenSettings) },
+                    trailing = {
+                        LocateButton(busy = state == NearbyState.Locating || ready?.refining == true, onClick = onRequestLocation)
+                        SettingsButton(onOpenSettings)
+                    },
                 )
             }
             item { Choices(NEARBY_RADII, radius, { "$it m" }, vm::setRadius) }
@@ -242,5 +253,20 @@ private fun NearbyStopCard(
                 }
             }
         }
+    }
+}
+
+/** Re-finds your position; spins while a fix is on its way. */
+@Composable
+private fun LocateButton(busy: Boolean, onClick: () -> Unit) {
+    val spin = rememberInfiniteTransition(label = "locate")
+    val angle by spin.animateFloat(0f, 360f, infiniteRepeatable(tween(900, easing = LinearEasing)), label = "locateSpin")
+    val reducedMotion = rememberReducedMotion()
+    IconButton(onClick = onClick, enabled = !busy) {
+        Icon(
+            painterResource(R.drawable.ic_refresh),
+            contentDescription = if (busy) "Finding your location" else "Refresh location",
+            modifier = Modifier.rotate(if (busy && !reducedMotion) angle else 0f),
+        )
     }
 }

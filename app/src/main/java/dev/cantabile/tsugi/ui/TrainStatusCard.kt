@@ -81,7 +81,13 @@ fun TrainStatusCard(vm: AppViewModel, modifier: Modifier = Modifier, onOpenStati
         Column(Modifier.padding(start = 16.dp, end = 12.dp, top = 14.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    if (s.segments.size == 1) "${s.segments[0].line?.title ?: s.segments[0].lineCode} disrupted" else "${s.segments.size} lines disrupted",
+                    s.segments.map { it.line?.title ?: it.lineCode }.distinct().let { lines ->
+                        when (lines.size) {
+                            0 -> "Train service disrupted"
+                            1 -> "${lines[0]} disrupted"
+                            else -> "${lines.size} lines disrupted"
+                        }
+                    },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),

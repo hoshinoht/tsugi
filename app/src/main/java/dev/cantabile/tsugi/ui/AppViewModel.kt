@@ -43,6 +43,8 @@ import dev.cantabile.tsugi.tracking.DisruptionWorker
 import dev.cantabile.tsugi.widget.Shortcuts
 import dev.cantabile.tsugi.widget.refreshFavouritesWidget
 import kotlinx.coroutines.async
+import dev.cantabile.tsugi.data.ageMillis
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -78,6 +80,8 @@ sealed interface NearbyState {
         val stations: List<NearbyStation> = emptyList(),
         /** Where the stops are around: you, or the searched address. */
         val center: Pair<Double, Double>? = null,
+        /** Shown from a recent cached fix while a fresh one is on its way. */
+        val refining: Boolean = false,
     ) : NearbyState
     data class Failed(val message: String) : NearbyState
 }
@@ -174,9 +178,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Your last known position (not a searched address), used to pick "Next up". */
     val here: StateFlow<Location?> = _here.asStateFlow()
 
-    /** Updates [here] quietly if location is already allowed; never prompts. */
+    /** Updates [here] quietly if location is already allowed; never prompts. Instant first, then fresh. */
     fun refreshHere() {
         if (!c.location.hasPermission()) return
+        c.location.lastKnown()?.takeIf { ageMillis(it) < QUICK_FIX_MAX_AGE_MS }?.let { quick ->
+            if (_here.value.let { it == null || it.elapsedRealtimeNanos < quick.elapsedRealtimeNanos }) _here.value = quick
+        }
         viewModelScope.launch { c.location.current()?.let { _here.value = it } }
     }
     private var locationLabel: String? = null
@@ -185,6 +192,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         loadStops()
+        // Warm up location at launch so Nearby and Next up have a position by the time you look.
+        refreshHere()
         viewModelScope.launch { radiusM.drop(1).collect { recomputeNearby() } }
         // Routes list every service at a stop, including ones LTA's arrivals feed omits because
         // they aren't running now. Once loaded, fill those into data already on screen.
@@ -279,7 +288,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Metres from your last known position to [stopCode], for leave-now alerts; null if unknown. */
     fun walkMetres(stopCode: String): Int? {
-        val here = _here.value ?: return null
+        // A position from a while ago can say "leave now" far too late; better no walk than a wrong one.
+        val here = _here.value?.takeIf { ageMillis(it) < WALK_FIX_MAX_AGE_MS } ?: return null
         val stop = c.stops[stopCode] ?: return null
         return distanceM(here.latitude, here.longitude, stop.lat, stop.lng)
     }
@@ -408,6 +418,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deletePlace(placeId: String) {
         viewModelScope.launch { c.favourites.update { list -> list.filterNot { it is Favourite.Place && it.id == placeId } } }
+        // A pinned home-screen shortcut to it would otherwise open a missing place.
+        Shortcuts.disable(getApplication(), "place:$placeId")
     }
 
     fun suggestPlaceName(code: String): String = c.stops[code]?.description?.let(::placeNameFrom) ?: code
@@ -440,6 +452,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Shows Nearby around a searched address rather than the phone's location. */
     fun showNearbyAt(hit: AddressHit) {
+        locateJob?.cancel()
+        refining = false
         lastLocation = Location("onemap").apply {
             latitude = hit.lat
             longitude = hit.lng
@@ -448,22 +462,45 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         recomputeNearby()
     }
 
+    private var locateJob: Job? = null
+    private var refining = false
+
+    /**
+     * Shows stops around you straight away from the last fix the phone already has (if recent), then
+     * refines with a fresh fix, which can take a few seconds. The list only jumps if you've moved.
+     */
     fun locate() {
         locationLabel = null
         if (!c.location.hasPermission()) {
             _nearby.value = NearbyState.NeedsPermission
             return
         }
-        _nearby.value = NearbyState.Locating
-        viewModelScope.launch {
-            val location = c.location.current()
-            if (location == null) {
-                _nearby.value = NearbyState.Failed("Couldn't get your location. Is location turned on?")
-                return@launch
-            }
-            lastLocation = location
-            _here.value = location
+        val quick = listOfNotNull(_here.value, c.location.lastKnown())
+            .filter { ageMillis(it) < QUICK_FIX_MAX_AGE_MS }
+            .maxByOrNull { it.elapsedRealtimeNanos }
+        refining = true
+        if (quick != null) {
+            lastLocation = quick
             recomputeNearby()
+        } else {
+            _nearby.value = NearbyState.Locating
+        }
+        locateJob?.cancel()
+        locateJob = viewModelScope.launch {
+            val fresh = c.location.current()
+            refining = false
+            if (locationLabel != null) return@launch // you picked an address meanwhile
+            when {
+                fresh == null && quick == null ->
+                    _nearby.value = NearbyState.Failed("Couldn't get your location. Is location turned on?")
+                fresh == null -> recomputeNearby()
+                else -> {
+                    _here.value = fresh
+                    val moved = quick == null || distanceM(quick.latitude, quick.longitude, fresh.latitude, fresh.longitude) > MOVED_M
+                    if (moved) lastLocation = fresh
+                    recomputeNearby()
+                }
+            }
         }
     }
 
@@ -472,6 +509,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private companion object {
+        /** A cached fix younger than this is shown at once while a fresh one is found. */
+        const val QUICK_FIX_MAX_AGE_MS = 10 * 60_000L
+        /** Leave-now only trusts a position this recent. */
+        const val WALK_FIX_MAX_AGE_MS = 3 * 60_000L
+        /** The fresh fix only reshuffles Nearby if you've moved further than this. */
+        const val MOVED_M = 25
         const val FRESH_SECONDS = 10L
         const val CROWD_FRESH_SECONDS = 10 * 60L
     }
@@ -489,6 +532,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             // Stations are bigger than stops, so look a little further for them.
             stations = stations.value?.nearby(location.latitude, location.longitude, radiusM.value + 200).orEmpty().take(3),
             center = location.latitude to location.longitude,
+            refining = refining && locationLabel == null,
         )
     }
 }

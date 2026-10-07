@@ -34,7 +34,8 @@ fun dayType(date: LocalDate): DayType = when {
  * A bus day runs from 4 am to 4 am: a last bus at 12:30 am belongs to the day before, and LTA
  * writes it as "0030" in that day's timetable.
  */
-const val SERVICE_DAY_START_HOUR = 4
+/** Night services' last buses run until about 4:30 am, so the service day turns over at 5. */
+const val SERVICE_DAY_START_HOUR = 5
 
 /** "0653" → 06:53; "2400" → 00:00; anything else ("-", blank) → null. */
 fun parseHhmm(hhmm: String): LocalTime? {
@@ -86,7 +87,7 @@ fun withTimetable(
         return s.copy(
             firstBus = s.firstBus ?: route.firstBusLabel(now).takeIf { s.buses.isEmpty() },
             lastBus = route.lastBusAt(now)?.toInstant(),
-            frequency = info?.get(s.serviceNo, route.direction)?.frequencyAt(now.toLocalTime()),
+            frequency = info?.get(s.serviceNo, route.direction)?.frequencyAt(now.toLocalTime(), dayType(now.toLocalDate())),
         )
     }
     val present = live.map { it.serviceNo }.toSet()

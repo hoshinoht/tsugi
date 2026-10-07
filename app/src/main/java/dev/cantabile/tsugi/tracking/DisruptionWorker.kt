@@ -33,7 +33,7 @@ import java.util.concurrent.TimeUnit
 class DisruptionWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val c = (applicationContext as TsugiApplication).container
-        if (!c.settings.disruptionAlerts.first()) return Result.success()
+        if (!c.settings.disruptionAlerts.first() || !c.api.hasKey) return Result.success()
         val status = runCatching { c.api.trainServiceAlerts() }.getOrNull()?.value?.toDomain(Instant.now())
             ?: return Result.retry()
         runCatching { c.stops.ensureLoaded() }
@@ -47,7 +47,8 @@ class DisruptionWorker(context: Context, params: WorkerParameters) : CoroutineWo
                 notify(applicationContext, notice.title, notice.text)
                 c.settings.setLastDisruptionKey(notice.key)
             }
-            notice == null && last.isNotEmpty() -> {
+            // Only when the network itself has recovered: not just because you unsaved the stops near it.
+            notice == null && last.isNotEmpty() && status.segments.isEmpty() && !status.disrupted -> {
                 notify(applicationContext, "Trains back to normal", "Your lines are running normally again.")
                 c.settings.setLastDisruptionKey("")
             }

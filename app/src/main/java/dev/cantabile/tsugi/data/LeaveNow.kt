@@ -3,9 +3,15 @@ package dev.cantabile.tsugi.data
 /** Closer than this, you're at the stop already. */
 private const val AT_STOP_M = 60
 
-/** Whole minutes to walk [metres] at ~80 m/min, rounded up; 0 when unknown or you're at the stop. */
+/** Streets wind: walking routes are about 30% longer than the straight line. */
+private const val DETOUR = 1.3
+
+/**
+ * Whole minutes to walk [metres] (straight line) at ~80 m/min allowing for [DETOUR], rounded up;
+ * 0 when unknown or you're at the stop.
+ */
 fun walkMinutes(metres: Int?): Int =
-    if (metres == null || metres < AT_STOP_M) 0 else (metres + WALK_M_PER_MIN - 1) / WALK_M_PER_MIN
+    if (metres == null || metres < AT_STOP_M) 0 else ((metres * DETOUR).toInt() + WALK_M_PER_MIN - 1) / WALK_M_PER_MIN
 
 /** A heads-up for a tracked bus: when to set off, or that it's close. */
 data class Heads(val title: String, val text: String)
