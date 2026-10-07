@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.cantabile.tsugi.R
+import dev.cantabile.tsugi.ui.theme.TsugiTheme
 import dev.cantabile.tsugi.data.compactFirstBus
 import dev.cantabile.tsugi.data.TOMORROW
 import dev.cantabile.tsugi.data.Favourite
@@ -148,7 +149,7 @@ fun soonest(codes: List<String>, arrivals: Map<String, StopArrivals>): List<Pair
 @Composable
 private fun StopSection(modifier: Modifier, vm: AppViewModel, code: String, data: StopArrivals?, now: Instant, onOpen: () -> Unit, onRemove: () -> Unit) {
     val colors = MaterialTheme.colorScheme
-    Surface(modifier = modifier, shape = RoundedCornerShape(24.dp), color = colors.surfaceContainer) {
+    Surface(modifier = modifier, shape = RoundedCornerShape(24.dp), color = colors.surfaceContainer, border = cardBorder()) {
         Column(Modifier.padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -179,7 +180,10 @@ fun MiniTile(service: ServiceArrivals, now: Instant, modifier: Modifier = Modifi
     val colors = MaterialTheme.colorScheme
     val first = service.buses.firstOrNull()
     val arriving = first != null && minutesUntil(first.eta, now) < 1
+    // Ink & Paper keeps the tile on paper and marks an arriving bus with the accent instead.
+    val ink = TsugiTheme.isInk
     val fg = when {
+        arriving && ink -> colors.tertiary
         arriving -> colors.onPrimary
         first == null -> colors.outline
         else -> colors.onSurface
@@ -191,7 +195,7 @@ fun MiniTile(service: ServiceArrivals, now: Instant, modifier: Modifier = Modifi
                     (first?.let { spokenEta(it, now) } ?: service.firstBus?.let { "not running, first bus $it" } ?: "not running")
             }
             .clip(RoundedCornerShape(12.dp))
-            .background(if (arriving) colors.primary else colors.surface)
+            .background(if (arriving && !ink) colors.primary else colors.surface)
             .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -200,7 +204,7 @@ fun MiniTile(service: ServiceArrivals, now: Instant, modifier: Modifier = Modifi
             autoSize = TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = MaterialTheme.typography.titleSmall.fontSize),
         )
         RollingText(
-            first?.let { if (arriving) "Arr" else "${minutesUntil(it.eta, now)}m" }
+            first?.let { if (arriving) (if (ink) "Now" else "Arr") else "${minutesUntil(it.eta, now)}m" }
                 ?: service.firstBus?.let { compactFirstBus(it).substringBefore(' ').let { t -> if (it.startsWith(TOMORROW)) "Tmr" else t } }
                 ?: "—",
             color = fg,

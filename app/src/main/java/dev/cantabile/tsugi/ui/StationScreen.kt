@@ -187,7 +187,7 @@ private fun LineStatus(station: Station, status: TrainStatus?) {
                 }
             }
         }
-        elsewhere.isNotEmpty() -> Surface(shape = RoundedCornerShape(24.dp), color = colors.tertiaryContainer, contentColor = colors.onTertiaryContainer) {
+        elsewhere.isNotEmpty() -> Surface(shape = RoundedCornerShape(24.dp), color = colors.tertiaryContainer, contentColor = colors.onTertiaryContainer, border = cardBorder()) {
             Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 elsewhere.mapNotNull { it.line }.distinct().forEach { LineBadge(it, it.code) }
                 Text("Disrupted elsewhere on the line", style = MaterialTheme.typography.bodyMedium)
@@ -217,7 +217,7 @@ private fun CrowdingCard(station: Station, crowding: Map<String, Crowding>, now:
     val colors = MaterialTheme.colorScheme
     // One row per line platform: an interchange can be quiet on one line and packed on another.
     val rows = station.codes.mapNotNull { c -> crowding[canonicalCode(c)]?.let { c to it } }
-    Surface(shape = RoundedCornerShape(24.dp), color = colors.surfaceContainer) {
+    Surface(shape = RoundedCornerShape(24.dp), color = colors.surfaceContainer, border = cardBorder()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Platform crowding", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             if (rows.isEmpty()) {
@@ -275,6 +275,7 @@ private fun LiftsCard(outages: List<String>) {
         shape = RoundedCornerShape(24.dp),
         color = if (outages.isEmpty()) colors.surfaceContainer else colors.tertiaryContainer,
         contentColor = if (outages.isEmpty()) colors.onSurface else colors.onTertiaryContainer,
+        border = cardBorder(),
     ) {
         Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Icon(painterResource(R.drawable.ic_wheelchair), null, Modifier.size(20.dp))
@@ -297,7 +298,7 @@ private fun LiftsCard(outages: List<String>) {
 @Composable
 private fun StationStopCard(s: AppViewModel.StopAtStation, data: StopArrivals?, now: Instant, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
-    Surface(onClick = onClick, shape = RoundedCornerShape(24.dp), color = colors.surfaceContainer) {
+    Surface(onClick = onClick, shape = RoundedCornerShape(24.dp), color = colors.surfaceContainer, border = cardBorder()) {
         Column(Modifier.padding(start = 14.dp, end = 8.dp, top = 10.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {

@@ -53,12 +53,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialShapes
+import androidx.compose.material3.toShape
+import androidx.compose.ui.text.TextStyle
+import dev.cantabile.tsugi.ui.theme.Mincho
+import dev.cantabile.tsugi.ui.theme.TsugiTheme
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.cantabile.tsugi.R
 import dev.cantabile.tsugi.data.stopsAwayLabel
@@ -186,8 +195,9 @@ fun FavouritesScreen(
                     Surface(
                         onClick = { onOpenStop(c.stopCode) },
                         modifier = Modifier.animateItem(),
-                        shape = RoundedCornerShape(32.dp),
-                        color = colors.surfaceContainerHigh,
+                        shape = RoundedCornerShape(if (TsugiTheme.isInk) 26.dp else 32.dp),
+                        color = cardColor(colors.surfaceContainerHigh),
+                        border = cardBorder(),
                     ) {
                         Column(Modifier.fillMaxWidth().padding(start = 22.dp, end = 20.dp, top = 18.dp, bottom = 18.dp)) {
                             Text("NO BUSES RUNNING", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = colors.onSurfaceVariant)
@@ -205,7 +215,12 @@ fun FavouritesScreen(
             if (nextUps.isNotEmpty()) {
                 item(key = "hero") {
                     NextUpPager(nextUps, Modifier.animateItem()) { nextUp ->
-                        HeroCard(
+                        if (TsugiTheme.isInk) InkHeroCard(
+                            vm, nextUp, now,
+                            onClick = { onOpenStop(nextUp.stopCode) },
+                            tracking = tracking.tracked == Tracked(nextUp.stopCode, nextUp.service.serviceNo),
+                            onToggleTracking = { tracking.toggle(nextUp.stopCode, nextUp.service.serviceNo) },
+                        ) else HeroCard(
                             vm, nextUp, now,
                             onClick = { onOpenStop(nextUp.stopCode) },
                             tracking = tracking.tracked == Tracked(nextUp.stopCode, nextUp.service.serviceNo),
@@ -223,7 +238,7 @@ fun FavouritesScreen(
                         onDragStopped = { dragOrder?.let(vm::saveCardOrder) },
                     )
                     val lift by animateDpAsState(if (dragging) 8.dp else 0.dp, label = "lift")
-                    Box(Modifier.shadow(lift, RoundedCornerShape(28.dp))) {
+                    Box(Modifier.shadow(lift, RoundedCornerShape(if (TsugiTheme.isInk) 22.dp else 28.dp))) {
                         when (card) {
                             is HomeCard.PlaceCard -> PlaceCard(card.place, soonest(card.place.stopCodes, arrivals), now, onClick = { onOpenPlace(card.place.id) }, handleModifier = handle)
                             is HomeCard.StopCard -> WholeStopCard(
@@ -249,7 +264,7 @@ fun FavouritesScreen(
                                         handleModifier = handle,
                                     )
                                     CollapsibleBody(expanded) {
-                                        Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+                                        Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(rowGap())) {
                                             card.favs.forEachIndexed { i, f ->
                                                 ServiceRow(vm, f.serviceNo, service(f), now, ListItemDefaults.segmentedShapes(i, card.favs.size), onClick = { onOpenStop(card.code) })
                                             }
@@ -348,6 +363,96 @@ private fun HeroCard(
     }
 }
 
+/**
+ * Ink & Paper's Next up: the service on an indigo cookie, where it's going and from where, then a
+ * hairline and the minutes in large Mincho. An arriving bus shows "Now".
+ */
+@Composable
+private fun InkHeroCard(
+    vm: AppViewModel,
+    nextUp: NextUp,
+    now: Instant,
+    onClick: () -> Unit,
+    tracking: Boolean,
+    onToggleTracking: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MaterialTheme.colorScheme
+    val service = nextUp.service
+    val next = nextUp.bus
+    val minutes = minutesUntil(next.eta, now)
+    Surface(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(26.dp), color = colors.surfaceContainer, border = cardBorder()) {
+        Column(Modifier.padding(start = 18.dp, end = 12.dp, top = 18.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                nextUp.distanceM?.let { "NEXT · $it M AWAY" } ?: "NEXT UP",
+                fontSize = 12.sp,
+                letterSpacing = 2.sp,
+                color = colors.onSurfaceVariant,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Box(Modifier.size(72.dp).clip(MaterialShapes.Cookie9Sided.toShape()).background(colors.primary), contentAlignment = Alignment.Center) {
+                    Text(service.serviceNo, color = colors.onPrimary, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        vm.stop(next.destinationCode)?.description ?: "—",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        listOfNotNull(
+                            vm.stop(nextUp.stopCode)?.description ?: nextUp.stopCode,
+                            vm.stopsAway(nextUp.stopCode, service.serviceNo, next)?.let(::stopsAwayLabel),
+                        ).joinToString(" · "),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.onSurfaceVariant,
+                    )
+                    lastBusNotice(service, now)?.let { Text(it, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold) }
+                }
+            }
+            HorizontalDivider(thickness = 1.dp, color = colors.outlineVariant)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (minutes < 1) {
+                    ArrivingNow(fontSize = 40.sp)
+                } else {
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        RollingText("$minutes", style = TextStyle(fontFamily = Mincho, fontWeight = FontWeight.Black, fontSize = 56.sp, lineHeight = 56.sp))
+                        Text(
+                            "min",
+                            color = colors.onSurfaceVariant,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(start = 6.dp, bottom = 8.dp),
+                        )
+                    }
+                }
+                LoadBars(next.load, colors.onSurface, Modifier.padding(start = 4.dp))
+                // Takes the space left, and gives way first on a narrow (swipeable) card so the bell always fits.
+                val later = service.buses.dropWhile { it != next }.drop(1).map { minutesUntil(it.eta, now) }
+                Text(
+                    if (later.isEmpty()) "" else "then ${later.joinToString(" · ")} min",
+                    fontSize = 14.sp,
+                    color = colors.onSurfaceVariant,
+                    textAlign = TextAlign.End,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = onToggleTracking) {
+                    Icon(
+                        painterResource(if (tracking) R.drawable.ic_bell_filled else R.drawable.ic_bell),
+                        contentDescription = if (tracking) "Stop alerts for ${service.serviceNo}" else "Alert me when ${service.serviceNo} is near",
+                        tint = if (tracking) colors.primary else colors.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
 // The extra Modifier is the drag handle from the reorderable list, not the layout modifier.
 @Suppress("ModifierParameter")
 @Composable
@@ -365,11 +470,18 @@ private fun WholeStopCard(
     val colors = MaterialTheme.colorScheme
     val running = services.filter { it.buses.isNotEmpty() }
     val soonest = running.minByOrNull { it.buses.first().eta }
-    Surface(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(28.dp), color = colors.surfaceContainerHigh) {
+    val ink = TsugiTheme.isInk
+    Surface(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(if (ink) 22.dp else 28.dp),
+        color = cardColor(colors.surfaceContainerHigh),
+        border = cardBorder(),
+    ) {
         Column(Modifier.padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f).padding(top = 8.dp)) {
-                    Text(vm.stop(code)?.description ?: code, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(vm.stop(code)?.description ?: code, style = stopNameStyle())
                     Text(
                         if (expanded) {
                             "Whole stop · $code · ${services.size} services"
@@ -423,7 +535,7 @@ private fun CollapsibleHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(title, style = if (TsugiTheme.isInk) stopNameStyle() else MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold))
             AnimatedVisibility(!expanded) {
                 Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -445,6 +557,16 @@ private fun DragHandle(handleModifier: Modifier) {
         modifier = handleModifier.padding(12.dp).size(20.dp),
     )
 }
+
+/** A stop's name on a card: Mincho 900 at 18 sp in Ink & Paper. */
+@Composable
+private fun stopNameStyle(): TextStyle =
+    if (TsugiTheme.isInk) MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp)
+    else MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+
+/** Space between rows in a list of buses: Ink & Paper's bordered rows need more than M3's segmented gap. */
+@Composable
+fun rowGap() = if (TsugiTheme.isInk) 6.dp else ListItemDefaults.SegmentedGap
 
 /** A reorderable card on Favourites. Ids double as collapse keys and the saved order. */
 private sealed interface HomeCard {
@@ -497,6 +619,10 @@ fun ServiceRow(
 ) {
     val colors = MaterialTheme.colorScheme
     val first = service?.buses?.firstOrNull()
+    if (TsugiTheme.isInk) {
+        InkServiceRow(vm, serviceNo, service, now, onClick, modifier, caption = caption)
+        return
+    }
     SegmentedListItem(
         onClick = onClick,
         shapes = shapes,
@@ -550,12 +676,80 @@ fun ServiceRow(
     }
 }
 
+/** Ink & Paper's bus row: a bordered card with the chip badge, the destination and Mincho minutes or "Now". */
+@Composable
+private fun InkServiceRow(
+    vm: AppViewModel,
+    serviceNo: String,
+    service: ServiceArrivals?,
+    now: Instant,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    caption: String? = null,
+) {
+    val colors = MaterialTheme.colorScheme
+    val first = service?.buses?.firstOrNull()
+    val ended = service != null && endedForToday(service)
+    Surface(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = 64.dp).then(if (ended) Modifier.alpha(ENDED_ALPHA) else Modifier),
+        shape = RoundedCornerShape(20.dp),
+        color = colors.surfaceContainer,
+        border = cardBorder(),
+    ) {
+        Row(
+            Modifier.padding(start = 10.dp, end = 14.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            ServiceBadge(serviceNo, active = first != null)
+            Column(Modifier.weight(1f)) {
+                Text(
+                    first?.let { vm.stop(it.destinationCode)?.description } ?: if (service == null) "Loading…" else "Not running now",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                val meta = if (first == null) {
+                    if (ended) "Service ended for today" else service?.firstBus?.let { "First bus $it" }
+                } else {
+                    listOfNotNull(service?.let { lastBusNotice(it, now) }, caption, first.load.label.ifEmpty { null }, "scheduled".takeIf { !first.monitored })
+                        .joinToString(" · ").ifEmpty { null }
+                }
+                meta?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            if (first != null) {
+                Column(horizontalAlignment = Alignment.End) {
+                    val m = minutesUntil(first.eta, now)
+                    if (m < 1) ArrivingNow() else InkMinutes(m)
+                    val later = service?.buses.orEmpty().drop(1).map { b -> minutesUntil(b.eta, now) }
+                    if (later.isNotEmpty()) {
+                        Text(later.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+    }
+}
+
 // The extra Modifier is the drag handle from the reorderable list, not the layout modifier.
 @Suppress("ModifierParameter")
 @Composable
 private fun PlaceCard(place: Favourite.Place, board: List<Pair<String, ServiceArrivals>>, now: Instant, onClick: () -> Unit, handleModifier: Modifier, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
-    Surface(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(28.dp), color = colors.tertiaryContainer, contentColor = colors.onTertiaryContainer) {
+    val ink = TsugiTheme.isInk
+    Surface(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(if (ink) 22.dp else 28.dp),
+        color = if (ink) colors.surfaceContainer else colors.tertiaryContainer,
+        contentColor = if (ink) colors.onSurface else colors.onTertiaryContainer,
+        border = cardBorder(),
+    ) {
         Column(Modifier.padding(start = 18.dp, end = 14.dp, top = 14.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {

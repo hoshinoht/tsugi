@@ -18,6 +18,19 @@ enum class ThemeMode(val label: String, val nightMode: Int) {
     Dark("Dark", UiModeManager.MODE_NIGHT_YES),
 }
 
+/**
+ * The app's look. The traditional colourways (伝統色) are Ink & Paper; Wallpaper is M3 Expressive
+ * in dynamic colour, the original look.
+ */
+enum class Colourway(val kanji: String, val label: String) {
+    Ai("藍", "Ai"),
+    Matcha("抹茶", "Matcha"),
+    Sakura("桜", "Sakura"),
+    Fuji("藤", "Fuji"),
+    Kaki("柿", "Kaki"),
+    Wallpaper("", "Wallpaper"),
+}
+
 enum class StopSort(val label: String) { Soonest("Soonest"), Number("Number"), Starred("Starred") }
 
 val NEARBY_RADII = listOf(200, 400, 800)
@@ -26,6 +39,7 @@ val ALERT_MINUTES = listOf(1, 2, 3, 5)
 /** User preferences, stored next to favourites in DataStore. */
 class SettingsRepository(private val context: Context, private val store: DataStore<Preferences>) {
     private val themeKey = stringPreferencesKey("theme")
+    private val colourwayKey = stringPreferencesKey("colourway")
     private val radiusKey = intPreferencesKey("nearby_radius")
     private val stopSortKey = stringPreferencesKey("stop_sort")
     private val alertKey = intPreferencesKey("alert_minutes")
@@ -53,6 +67,25 @@ class SettingsRepository(private val context: Context, private val store: DataSt
     suspend fun setTheme(mode: ThemeMode) {
         store.edit { it[themeKey] = mode.name }
         context.getSystemService(UiModeManager::class.java).setApplicationNightMode(mode.nightMode)
+    }
+
+    /**
+     * New installs start on Ai; installs from before colourways existed keep Wallpaper. Until
+     * [settleColourway] stores the choice, an unset value is read as whichever of the two applies.
+     */
+    val colourway: Flow<Colourway> = store.data.map { prefs ->
+        Colourway.entries.firstOrNull { it.name == prefs[colourwayKey] } ?: defaultColourway
+    }.distinctUntilChanged()
+
+    suspend fun setColourway(colourway: Colourway) = store.edit { it[colourwayKey] = colourway.name }
+
+    /** Stores the default once, so a new install stays on Ai after its first update. */
+    suspend fun settleColourway() = store.edit { if (it[colourwayKey] == null) it[colourwayKey] = defaultColourway.name }
+
+    /** A fresh install has never been updated; an update from an older version has. */
+    private val defaultColourway by lazy {
+        val info = context.packageManager.getPackageInfo(context.packageName, 0)
+        if (info.firstInstallTime == info.lastUpdateTime) Colourway.Ai else Colourway.Wallpaper
     }
 
     /** Stops recently opened from Search, newest first. */

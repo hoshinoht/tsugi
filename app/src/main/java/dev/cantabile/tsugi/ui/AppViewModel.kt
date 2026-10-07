@@ -41,6 +41,7 @@ import dev.cantabile.tsugi.data.ServiceArrivals
 import dev.cantabile.tsugi.data.StopArrivals
 import dev.cantabile.tsugi.data.StopSort
 import dev.cantabile.tsugi.data.ThemeMode
+import dev.cantabile.tsugi.data.Colourway
 import dev.cantabile.tsugi.data.SINGAPORE
 import dev.cantabile.tsugi.data.withTimetable
 import dev.cantabile.tsugi.data.TrainStatus
@@ -106,6 +107,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         c.settings.stopSort.stateIn(viewModelScope, SharingStarted.Eagerly, StopSort.Soonest)
     val theme: StateFlow<ThemeMode> =
         c.settings.theme.stateIn(viewModelScope, SharingStarted.Eagerly, ThemeMode.System)
+    val colourway: StateFlow<Colourway?> =
+        c.settings.colourway.stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val developerMode: StateFlow<Boolean> =
         c.settings.developerMode.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
@@ -169,6 +172,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { c.settings.setTheme(mode) }
     }
 
+    fun setColourway(colourway: Colourway) {
+        viewModelScope.launch { c.settings.setColourway(colourway) }
+    }
+
     fun setAlertMinutes(minutes: Int) {
         viewModelScope.launch { c.settings.setAlertMinutes(minutes) }
     }
@@ -210,6 +217,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val routes = c.routes.index
 
     init {
+        viewModelScope.launch { c.settings.settleColourway() }
         loadStops()
         // Warm up location at launch so Nearby and Next up have a position by the time you look.
         refreshHere()

@@ -28,6 +28,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -76,7 +77,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -86,6 +89,9 @@ import dev.cantabile.tsugi.data.Load
 import dev.cantabile.tsugi.data.SINGAPORE
 import dev.cantabile.tsugi.data.ServiceArrivals
 import dev.cantabile.tsugi.data.timeLabel
+import dev.cantabile.tsugi.data.TOMORROW
+import dev.cantabile.tsugi.ui.theme.Mincho
+import dev.cantabile.tsugi.ui.theme.TsugiTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.time.Duration
@@ -138,6 +144,13 @@ fun lastBusNotice(service: ServiceArrivals, now: Instant): String? {
     return "Last bus ${timeLabel(last.atZone(SINGAPORE).toLocalTime())}"
 }
 
+/** Not running, and the next bus is tomorrow's first. */
+fun endedForToday(service: ServiceArrivals): Boolean =
+    service.buses.isEmpty() && service.firstBus?.startsWith(TOMORROW) == true
+
+/** Ink & Paper dims services that have ended for the night to this opacity. */
+const val ENDED_ALPHA = 0.45f
+
 /** Corner radii for a connected row of tiles: big outer corners, small inner ones. */
 fun rowShape(index: Int, count: Int, outer: Dp = 16.dp, inner: Dp = 6.dp): Shape = when {
     count == 1 -> RoundedCornerShape(outer)
@@ -146,14 +159,82 @@ fun rowShape(index: Int, count: Int, outer: Dp = 16.dp, inner: Dp = 6.dp): Shape
     else -> RoundedCornerShape(inner)
 }
 
+/** Ink & Paper cards have a 1 dp line border instead of elevation or a tonal shadow; Expressive has none. */
+@Composable
+fun cardBorder(): BorderStroke? =
+    if (TsugiTheme.isInk) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null
+
+/** A card's colour: [expressive] in Expressive, the plain card colour in Ink & Paper. */
+@Composable
+fun cardColor(expressive: Color): Color =
+    if (TsugiTheme.isInk) MaterialTheme.colorScheme.surfaceContainer else expressive
+
+/**
+ * Ink & Paper's arriving mark: a vermilion dot and "Now" in Mincho. This is the only use of the
+ * accent colour.
+ */
+@Composable
+fun ArrivingNow(modifier: Modifier = Modifier, fontSize: TextUnit = 24.sp) {
+    val accent = MaterialTheme.colorScheme.tertiary
+    Row(
+        modifier.clearAndSetSemantics { contentDescription = "Arriving now" },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(Modifier.size(8.dp).background(accent, RoundedCornerShape(4.dp)))
+        Text("Now", color = accent, fontFamily = Mincho, fontWeight = FontWeight.Black, fontSize = fontSize)
+    }
+}
+
+/** Minutes in Mincho with a small sans "min", as in Ink & Paper's rows and tiles. */
+@Composable
+fun InkMinutes(minutes: Long, modifier: Modifier = Modifier, fontSize: TextUnit = 26.sp, unitSize: TextUnit = 12.sp) {
+    Row(modifier, verticalAlignment = Alignment.Bottom) {
+        RollingText("$minutes", style = TextStyle(fontFamily = Mincho, fontWeight = FontWeight.Black, fontSize = fontSize))
+        Text(
+            "min",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = unitSize,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(start = 3.dp, bottom = 4.dp),
+        )
+    }
+}
+
+/**
+ * In Ink & Paper the badge is a 48×40 dp tile in the chip colours, or in indigo when [filled]
+ * (a stop's own services). [filled] does nothing in Expressive.
+ */
 @Composable
 fun ServiceBadge(
     serviceNo: String,
     modifier: Modifier = Modifier,
     active: Boolean = true,
     compact: Boolean = false,
+    filled: Boolean = false,
 ) {
     val colors = MaterialTheme.colorScheme
+    if (TsugiTheme.isInk && !compact) {
+        Surface(
+            modifier = modifier,
+            shape = RoundedCornerShape(14.dp),
+            color = when {
+                !active -> colors.surfaceContainerHighest
+                filled -> colors.primary
+                else -> colors.secondaryContainer
+            },
+            contentColor = when {
+                !active -> colors.onSurfaceVariant
+                filled -> colors.onPrimary
+                else -> colors.onSecondaryContainer
+            },
+        ) {
+            Box(Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 40.dp).padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
+                Text(serviceNo, style = MaterialTheme.typography.titleMedium, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+            }
+        }
+        return
+    }
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(if (compact) 10.dp else 14.dp),
@@ -323,9 +404,11 @@ fun Modifier.dashedOutline(shape: Shape, color: Color, width: Dp = 1.5.dp): Modi
 @Composable
 fun ArrivalTile(bus: Bus, now: Instant, shape: Shape, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
+    val ink = TsugiTheme.isInk
     val arriving = minutesUntil(bus.eta, now) < 1
-    val bg = if (arriving) colors.primary else colors.surface
-    val fg = if (arriving) colors.onPrimary else colors.onSurface
+    // Ink & Paper tiles stay on paper; an arriving bus shows "Now" rather than filling the tile.
+    val bg = if (arriving && !ink) colors.primary else colors.surface
+    val fg = if (arriving && !ink) colors.onPrimary else colors.onSurface
     val description = listOfNotNull(
         spokenEta(bus, now),
         bus.load.label.ifEmpty { null }?.lowercase(),
@@ -342,7 +425,9 @@ fun ArrivalTile(bus: Bus, now: Instant, shape: Shape, modifier: Modifier = Modif
             .padding(start = 12.dp, end = 8.dp, top = 10.dp, bottom = 9.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Row(verticalAlignment = Alignment.Bottom) {
+        if (ink) {
+            if (arriving) ArrivingNow(fontSize = 22.sp) else InkMinutes(minutesUntil(bus.eta, now), fontSize = 24.sp, unitSize = 11.sp)
+        } else Row(verticalAlignment = Alignment.Bottom) {
             RollingText(etaLabel(bus, now), color = fg, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             if (!arriving) {
                 Text(
@@ -383,7 +468,8 @@ fun ScreenTitle(title: String, modifier: Modifier = Modifier, subtitle: String? 
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold)
+            // Ink & Paper titles keep the style's Mincho 900.
+            Text(title, style = MaterialTheme.typography.headlineLarge, fontWeight = if (TsugiTheme.isInk) null else FontWeight.SemiBold)
             if (subtitle != null) {
                 Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -463,7 +549,7 @@ fun formatAge(seconds: Long): String = if (seconds < 60) "${seconds}s" else "${s
 
 @Composable
 fun MessageCard(text: String, modifier: Modifier = Modifier, action: (@Composable () -> Unit)? = null) {
-    Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
+    Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainer, border = cardBorder()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(text, style = MaterialTheme.typography.bodyLarge)
             action?.invoke()

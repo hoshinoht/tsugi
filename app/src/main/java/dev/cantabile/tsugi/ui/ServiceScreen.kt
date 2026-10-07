@@ -34,6 +34,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.cantabile.tsugi.R
+import dev.cantabile.tsugi.ui.theme.TsugiTheme
+import androidx.compose.ui.unit.sp
 import dev.cantabile.tsugi.data.SINGAPORE
 import dev.cantabile.tsugi.data.categoryLabel
 import dev.cantabile.tsugi.data.firstBusLabel
@@ -78,6 +80,8 @@ fun ServiceScreen(vm: AppViewModel, serviceNo: String, onBack: () -> Unit, onOpe
     val infoIndex by vm.serviceInfo.collectAsStateWithLifecycle()
     val info = infoIndex?.get(serviceNo, direction)
     val now = ZonedDateTime.now(SINGAPORE)
+    val ink = TsugiTheme.isInk
+    val frequency = info?.frequencyAt(now.toLocalTime(), dayType(now.toLocalDate()))
 
     Scaffold(
         containerColor = colors.surface,
@@ -86,6 +90,17 @@ fun ServiceScreen(vm: AppViewModel, serviceNo: String, onBack: () -> Unit, onOpe
                 title = {},
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.surface),
                 navigationIcon = { IconButton(onClick = onBack) { Icon(painterResource(R.drawable.ic_back), "Back") } },
+                actions = {
+                    if (ink && frequency != null) {
+                        Text(
+                            frequency.uppercase(),
+                            fontSize = 12.sp,
+                            letterSpacing = 2.sp,
+                            color = colors.onSurfaceVariant,
+                            modifier = Modifier.padding(end = 16.dp),
+                        )
+                    }
+                },
             )
         },
     ) { inner ->
@@ -97,14 +112,19 @@ fun ServiceScreen(vm: AppViewModel, serviceNo: String, onBack: () -> Unit, onOpe
             item {
                 Column(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column {
-                        Text("Bus $serviceNo", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold)
+                        if (ink) {
+                            val towards = route.lastOrNull()?.let { vm.stop(it.stop)?.description }
+                            InkServiceHeader(serviceNo, towards, Modifier.padding(bottom = 8.dp))
+                        } else {
+                            Text("Bus $serviceNo", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold)
+                        }
                         Text(
                             listOfNotNull(operator, info?.category?.let(::categoryLabel), "${route.size} stops").joinToString(" · "),
                             style = MaterialTheme.typography.bodyMedium,
                             color = colors.onSurfaceVariant,
                         )
                         val running = listOfNotNull(
-                            info?.frequencyAt(now.toLocalTime(), dayType(now.toLocalDate()))?.replaceFirstChar { it.uppercase() },
+                            frequency?.takeIf { !ink }?.replaceFirstChar { it.uppercase() },
                             info?.loop?.takeIf { it.isNotBlank() }?.let { "loops at $it" },
                         )
                         if (running.isNotEmpty()) {
@@ -117,7 +137,42 @@ fun ServiceScreen(vm: AppViewModel, serviceNo: String, onBack: () -> Unit, onOpe
                 }
             }
             if (route.isEmpty()) item { MessageCard("Route data is still downloading, or this service isn't in LTA's route list.") }
-            itemsIndexed(route, key = { _, r -> "${r.direction}-${r.seq}-${r.stop}" }) { i, r ->
+            if (ink && route.isNotEmpty()) {
+                // One bordered card holding the whole line, so the brush runs unbroken from stop to stop.
+                item(key = "route-$direction") {
+                    val fromIndex = route.indexOfFirst { it.stop == fromStop }.takeIf { it >= 0 }
+                    // The ink reaches the nearest bus still on its way to your stop.
+                    val busIndex = busesAt.keys.filter { fromIndex == null || it <= fromIndex }.maxOrNull() ?: -1
+                    Surface(
+                        Modifier.padding(horizontal = 4.dp),
+                        shape = RoundedCornerShape(26.dp),
+                        color = colors.surfaceContainer,
+                        border = cardBorder(),
+                    ) {
+                        Column(Modifier.padding(vertical = 12.dp)) {
+                            route.forEachIndexed { i, r ->
+                                val stop = vm.stop(r.stop)
+                                InkRouteStop(
+                                    index = i,
+                                    count = route.size,
+                                    name = stop?.description ?: r.stop,
+                                    meta = listOfNotNull(r.stop, stop?.road, r.firstBusLabel(now)?.let { "first $it" }, r.lastBusLabel(now)?.let { "last $it" }).joinToString(" · "),
+                                    mark = when {
+                                        i == fromIndex -> RouteMark.You
+                                        busesAt[i] != null -> RouteMark.Bus
+                                        i < busIndex -> RouteMark.Passed
+                                        else -> RouteMark.Ahead
+                                    },
+                                    travelledTo = busIndex,
+                                    buses = busesAt[i].orEmpty(),
+                                    now = clock,
+                                    onClick = { onOpenStop(r.stop) },
+                                )
+                            }
+                        }
+                    }
+                }
+            } else itemsIndexed(route, key = { _, r -> "${r.direction}-${r.seq}-${r.stop}" }) { i, r ->
                 val stop = vm.stop(r.stop)
                 val buses = busesAt[i].orEmpty()
                 SegmentedListItem(

@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.state.updateAppWidgetState
 import dev.cantabile.tsugi.R
@@ -63,32 +64,35 @@ class WidgetConfigActivity : ComponentActivity() {
         val c = (application as TsugiApplication).container
 
         setContent {
-            TsugiTheme {
-                val scope = rememberCoroutineScope()
-                var choices by remember { mutableStateOf<List<WidgetChoice>?>(null) }
-                LaunchedEffect(Unit) {
-                    runCatching { c.stops.ensureLoaded() }
-                    val favourites = inCardOrder(c.favourites.favourites.first(), c.settings.cardOrder.first())
-                    val singles = favourites.map { f -> if (f is Favourite.Service) Favourite.Stop(f.stopCode) else f }.distinct().map { f ->
-                        when (f) {
-                            is Favourite.Place -> WidgetChoice(f.name, "Place · ${f.stopCodes.size} stops", f.cardId)
-                            else -> WidgetChoice(c.stops[f.stopCode]?.description ?: f.stopCode, "Stop ${f.stopCode}", "stop:${f.stopCode}")
+            val colourway by c.settings.colourway.collectAsStateWithLifecycle(null)
+            colourway?.let { theme ->
+                TsugiTheme(theme) {
+                    val scope = rememberCoroutineScope()
+                    var choices by remember { mutableStateOf<List<WidgetChoice>?>(null) }
+                    LaunchedEffect(Unit) {
+                        runCatching { c.stops.ensureLoaded() }
+                        val favourites = inCardOrder(c.favourites.favourites.first(), c.settings.cardOrder.first())
+                        val singles = favourites.map { f -> if (f is Favourite.Service) Favourite.Stop(f.stopCode) else f }.distinct().map { f ->
+                            when (f) {
+                                is Favourite.Place -> WidgetChoice(f.name, "Place · ${f.stopCodes.size} stops", f.cardId)
+                                else -> WidgetChoice(c.stops[f.stopCode]?.description ?: f.stopCode, "Stop ${f.stopCode}", "stop:${f.stopCode}")
+                            }
                         }
+                        choices = listOf(WidgetChoice("All favourites", "Pinned buses first, then the soonest", "")) + singles
                     }
-                    choices = listOf(WidgetChoice("All favourites", "Pinned buses first, then the soonest", "")) + singles
-                }
-                ConfigScreen(choices, onCancel = ::finish) { choice ->
-                    scope.launch {
-                        // Only configure our own widgets; anything else (this activity is exported) just closes.
-                        val ours = AppWidgetManager.getInstance(this@WidgetConfigActivity).getAppWidgetInfo(widgetId)?.provider?.className ==
-                            FavouritesWidgetReceiver::class.java.name
-                        val glanceId = if (ours) runCatching { GlanceAppWidgetManager(this@WidgetConfigActivity).getGlanceIdBy(widgetId) }.getOrNull() else null
-                        if (glanceId != null) {
-                            updateAppWidgetState(this@WidgetConfigActivity, glanceId) { it[WIDGET_TARGET] = choice.target }
-                            FavouritesWidget().update(this@WidgetConfigActivity, glanceId)
-                            setResult(RESULT_OK, result)
+                    ConfigScreen(choices, onCancel = ::finish) { choice ->
+                        scope.launch {
+                            // Only configure our own widgets; anything else (this activity is exported) just closes.
+                            val ours = AppWidgetManager.getInstance(this@WidgetConfigActivity).getAppWidgetInfo(widgetId)?.provider?.className ==
+                                FavouritesWidgetReceiver::class.java.name
+                            val glanceId = if (ours) runCatching { GlanceAppWidgetManager(this@WidgetConfigActivity).getGlanceIdBy(widgetId) }.getOrNull() else null
+                            if (glanceId != null) {
+                                updateAppWidgetState(this@WidgetConfigActivity, glanceId) { it[WIDGET_TARGET] = choice.target }
+                                FavouritesWidget().update(this@WidgetConfigActivity, glanceId)
+                                setResult(RESULT_OK, result)
+                            }
+                            finish()
                         }
-                        finish()
                     }
                 }
             }

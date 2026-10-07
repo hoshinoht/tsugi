@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -46,6 +47,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
+import dev.cantabile.tsugi.ui.theme.TsugiTheme
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.cantabile.tsugi.R
 import dev.cantabile.tsugi.data.Favourite
@@ -53,6 +58,7 @@ import dev.cantabile.tsugi.data.allStopCodes
 import dev.cantabile.tsugi.tracking.Tracked
 import dev.cantabile.tsugi.data.ServiceArrivals
 import dev.cantabile.tsugi.data.Station
+import dev.cantabile.tsugi.data.NearbyStation
 import dev.cantabile.tsugi.data.StopSort
 import dev.cantabile.tsugi.data.stopsAwayLabel
 import java.time.Duration
@@ -132,12 +138,16 @@ fun StopScreen(
             ) {
                 item {
                     Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(stop?.description ?: code, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            listOfNotNull(stop?.road, code).joinToString(" · "),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = colors.onSurfaceVariant,
-                        )
+                        if (TsugiTheme.isInk) {
+                            InkStopHeader(vm, code, stop?.description ?: code, stop?.road, stations.firstOrNull())
+                        } else {
+                            Text(stop?.description ?: code, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                listOfNotNull(stop?.road, code).joinToString(" · "),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colors.onSurfaceVariant,
+                            )
+                        }
                         if (stations.isNotEmpty()) {
                             FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 stations.forEach { near -> StationChip(near.station, near.distanceM) { onOpenStation(near.station.codes.first()) } }
@@ -177,6 +187,27 @@ fun StopScreen(
             }
         }
     }
+}
+
+/**
+ * Ink & Paper's stop header: the name in Mincho, a short vermilion underline, then the road, code,
+ * nearest station and the stop across the road.
+ */
+@Composable
+private fun InkStopHeader(vm: AppViewModel, code: String, name: String, road: String?, station: NearbyStation?) {
+    Text(name, style = MaterialTheme.typography.headlineLarge, fontSize = 34.sp, lineHeight = 40.sp)
+    Box(Modifier.padding(vertical = 2.dp).size(width = 48.dp, height = 3.dp).background(MaterialTheme.colorScheme.tertiary, RoundedCornerShape(2.dp)))
+    Text(
+        listOfNotNull(
+            road,
+            code,
+            station?.let { "${it.station.title} ${it.distanceM} m" },
+            vm.acrossTheRoad(code)?.let { "across the road: ${it.stop.description}" },
+        ).joinToString(" · "),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 4.dp),
+    )
 }
 
 /** "Bugis MRT · 80 m" with its lines' colours; opens the station. */
@@ -249,13 +280,21 @@ private fun ServiceCard(
     onOpenRoute: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
+    val ink = TsugiTheme.isInk
     val running = service.buses.isNotEmpty()
-    Surface(modifier = modifier, shape = RoundedCornerShape(24.dp), color = colors.surfaceContainer) {
+    val ended = ink && endedForToday(service)
+    Surface(
+        modifier = modifier.then(if (ended) Modifier.alpha(ENDED_ALPHA) else Modifier),
+        shape = RoundedCornerShape(if (ink) 22.dp else 24.dp),
+        color = colors.surfaceContainer,
+        border = cardBorder(),
+    ) {
         Column(Modifier.padding(start = 12.dp, end = 8.dp, top = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 ServiceBadge(
                     service.serviceNo,
                     active = running,
+                    filled = true,
                     modifier = Modifier.clip(RoundedCornerShape(14.dp)).clickable(onClickLabel = "Show route", onClick = onOpenRoute),
                 )
                 Column(Modifier.weight(1f)) {
@@ -274,6 +313,9 @@ private fun ServiceCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.onSurfaceVariant,
                     )
+                }
+                if (ink && service.buses.firstOrNull()?.let { minutesUntil(it.eta, now) < 1 } == true) {
+                    ArrivingNow(fontSize = 22.sp)
                 }
                 if (running || tracking) {
                     IconToggleButton(checked = tracking, onCheckedChange = { onToggleTracking() }) {
@@ -294,7 +336,7 @@ private fun ServiceCard(
             }
             if (!running && service.firstBus != null) {
                 Text(
-                    "First bus ${service.firstBus}",
+                    if (ended) "Service ended for today · first bus ${service.firstBus}" else "First bus ${service.firstBus}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = colors.onSurfaceVariant,
                     modifier = Modifier.padding(start = 4.dp),
@@ -311,9 +353,9 @@ private fun ServiceCard(
                 }
             }
             if (running) {
-                Row(Modifier.padding(end = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(Modifier.padding(end = 4.dp), horizontalArrangement = Arrangement.spacedBy(if (ink) 6.dp else 4.dp)) {
                     service.buses.forEachIndexed { i, bus ->
-                        ArrivalTile(bus, now, rowShape(i, 3), Modifier.weight(1f))
+                        ArrivalTile(bus, now, if (ink) RoundedCornerShape(12.dp) else rowShape(i, 3), Modifier.weight(1f))
                     }
                     repeat(3 - service.buses.size) { Box(Modifier.weight(1f)) }
                 }
