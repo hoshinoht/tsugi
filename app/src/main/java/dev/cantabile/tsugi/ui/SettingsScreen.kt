@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -100,6 +101,9 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
             item {
                 Setting("Train disruptions", "Notify me when an MRT or LRT line near my saved stops is disrupted. Checked every 15 minutes.") {
                     Choices(listOf(false, true), disruptions, { if (it) "On" else "Off" }, setDisruptions)
+                    if (disruptions) {
+                        TextButton(onClick = vm::sendTestDisruption) { Text("Send a test alert") }
+                    }
                 }
             }
             item {

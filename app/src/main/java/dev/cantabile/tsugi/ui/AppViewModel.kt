@@ -102,6 +102,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         c.settings.disruptionAlerts.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     /** Turns background disruption checks on or off; the caller asks for notification permission first. */
+    fun sendTestDisruption() {
+        viewModelScope.launch { DisruptionWorker.sendTest(getApplication()) }
+    }
+
     fun setDisruptionAlerts(on: Boolean) {
         viewModelScope.launch {
             c.settings.setDisruptionAlerts(on)

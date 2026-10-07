@@ -1,6 +1,10 @@
 package dev.cantabile.tsugi.tracking
 
 import android.app.Notification
+import dev.cantabile.tsugi.data.TrainLine
+import dev.cantabile.tsugi.data.TrainMessageDto
+import dev.cantabile.tsugi.data.TrainAlertsDto
+import dev.cantabile.tsugi.data.AffectedSegmentDto
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -71,6 +75,23 @@ class DisruptionWorker(context: Context, params: WorkerParameters) : CoroutineWo
 
         fun cancel(context: Context) {
             WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+        }
+
+        /**
+         * Sends LTA's own sample disruption (API guide, Annex C: North East Line, Boon Keng to Dhoby
+         * Ghaut towards HarbourFront) through the real message builder and notification, marked as a
+         * test, so you can see what an alert looks like and that notifications get through.
+         */
+        suspend fun sendTest(context: Context) {
+            val c = (context.applicationContext as TsugiApplication).container
+            val stations = runCatching { c.stations.ensureLoaded() }.getOrNull()
+            val sample = TrainAlertsDto(
+                status = 2,
+                segments = listOf(AffectedSegmentDto(line = "NEL", direction = "HarbourFront", stations = "NE9,NE8,NE7,NE6", freePublicBus = "NE9,NE8,NE7,NE6")),
+                messages = listOf(TrainMessageDto(content = "NEL - Additional travelling time of 20 minutes between Boon Keng and Dhoby Ghaut stations towards HarbourFront station due to a signal fault.")),
+            ).toDomain(Instant.now())
+            val notice = disruptionNotice(sample, setOf(TrainLine.NEL)) { code -> stations?.get(code)?.name } ?: return
+            notify(context, "Test · ${notice.title}", notice.text)
         }
 
         private fun notify(context: Context, title: String, text: String) {
