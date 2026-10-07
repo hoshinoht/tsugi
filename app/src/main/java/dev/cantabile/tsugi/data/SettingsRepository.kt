@@ -32,6 +32,7 @@ class SettingsRepository(private val context: Context, private val store: DataSt
     private val recentKey = stringPreferencesKey("recent_stops")
     private val cardOrderKey = stringPreferencesKey("card_order")
     private val disruptionAlertsKey = booleanPreferencesKey("disruption_alerts")
+    private val developerModeKey = booleanPreferencesKey("developer_mode")
     private val lastDisruptionPref = stringPreferencesKey("last_disruption")
 
     /** The user's order for Favourites cards, as card ids ("place:…", "stop:…", "group:…"). */
@@ -69,6 +70,11 @@ class SettingsRepository(private val context: Context, private val store: DataSt
     val disruptionAlerts: Flow<Boolean> = store.data.map { it[disruptionAlertsKey] ?: false }.distinctUntilChanged()
 
     suspend fun setDisruptionAlerts(on: Boolean) = store.edit { it[disruptionAlertsKey] = on }
+
+    /** Shows testing tools in Settings. Off by default. */
+    val developerMode: Flow<Boolean> = store.data.map { it[developerModeKey] ?: false }.distinctUntilChanged()
+
+    suspend fun setDeveloperMode(on: Boolean) = store.edit { it[developerModeKey] = on }
 
     /** The last disruption announced, so the same one isn't announced twice; empty when none. */
     val lastDisruptionKey: Flow<String> = store.data.map { it[lastDisruptionPref] ?: "" }

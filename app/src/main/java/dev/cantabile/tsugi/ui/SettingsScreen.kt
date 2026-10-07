@@ -16,13 +16,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -52,6 +52,7 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
     val sort by vm.stopSort.collectAsStateWithLifecycle()
     val alert by vm.alertMinutes.collectAsStateWithLifecycle()
     val disruptions by vm.disruptionAlerts.collectAsStateWithLifecycle()
+    val developerMode by vm.developerMode.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) vm.setDisruptionAlerts(true)
@@ -101,8 +102,31 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
             item {
                 Setting("Train disruptions", "Notify me when an MRT or LRT line near my saved stops is disrupted. Checked every 15 minutes.") {
                     Choices(listOf(false, true), disruptions, { if (it) "On" else "Off" }, setDisruptions)
-                    if (disruptions) {
-                        TextButton(onClick = vm::sendTestDisruption) { Text("Send a test alert") }
+                }
+            }
+            item {
+                Setting("Developer mode", "Shows testing tools for checking the app's alerts and data.") {
+                    Text(
+                        "Only turn on if you know what you are doing!",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.error,
+                    )
+                    Choices(listOf(false, true), developerMode, { if (it) "On" else "Off" }, vm::setDeveloperMode)
+                }
+            }
+            if (developerMode) {
+                item {
+                    Setting("Developer", "Testing tools. These don't change your settings or favourites.") {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Train disruption alert", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "Sends LTA's sample disruption (North East Line) as a notification marked \"Test\", to check alerts get through.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.onSurfaceVariant,
+                            )
+                            FilledTonalButton(onClick = vm::sendTestDisruption, modifier = Modifier.padding(top = 4.dp)) { Text("Send a test alert") }
+                        }
                     }
                 }
             }

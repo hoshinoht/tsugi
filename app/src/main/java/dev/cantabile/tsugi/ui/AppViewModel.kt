@@ -106,6 +106,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         c.settings.stopSort.stateIn(viewModelScope, SharingStarted.Eagerly, StopSort.Soonest)
     val theme: StateFlow<ThemeMode> =
         c.settings.theme.stateIn(viewModelScope, SharingStarted.Eagerly, ThemeMode.System)
+    val developerMode: StateFlow<Boolean> =
+        c.settings.developerMode.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun setDeveloperMode(on: Boolean) {
+        viewModelScope.launch { c.settings.setDeveloperMode(on) }
+    }
+
     val disruptionAlerts: StateFlow<Boolean> =
         c.settings.disruptionAlerts.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
