@@ -11,7 +11,7 @@
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.4.20-7F52FF?logo=kotlin&logoColor=white)](gradle/libs.versions.toml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-[Features](#features) · [Architecture](#architecture) · [Quick start](#quick-start) · [Security](#security) · [Development](#development)
+[Screenshots](#screenshots) · [Features](#features) · [Architecture](#architecture) · [Quick start](#quick-start) · [Security](#security) · [Development](#development)
 
 </div>
 
@@ -32,6 +32,23 @@
 | **Extras** | Configurable home-screen widget · Quick Settings tile · launcher shortcuts for saved stops · disruption notifications |
 | **Size** | About 4.5 MB release APK (R8 shrinking) |
 | **Stack** | Kotlin 2.4 · Jetpack Compose · Material 3 Expressive · Glance · OkHttp · DataStore |
+
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/images/stop.png" alt="Stop screen: live arrivals with crowding and deck type, a map of the stop, and the stop across the road" width="200"><br><sub>Stop: arrivals, map, across the road</sub></td>
+    <td align="center"><img src="docs/images/station.png" alt="Bugis MRT station: platform crowding forecast, lift status and bus stops at the exits" width="200"><br><sub>Station: crowding, lifts, exits</sub></td>
+    <td align="center"><img src="docs/images/nearby.png" alt="Nearby stops around ION Orchard with live arrivals and first-bus times" width="200"><br><sub>Nearby, around a searched place</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/images/search.png" alt="Search results for Bugis: an MRT station, places and bus stops" width="200"><br><sub>Search: stations, places, stops</sub></td>
+    <td align="center"><img src="docs/images/route.png" alt="Bus 32's route with direction toggle and first and last bus at each stop" width="200"><br><sub>Route: stops in order</sub></td>
+    <td></td>
+  </tr>
+</table>
+
+*Taken on a Galaxy S25+ in dark mode with live LTA data; colours follow the wallpaper.*
 
 ## Features
 
