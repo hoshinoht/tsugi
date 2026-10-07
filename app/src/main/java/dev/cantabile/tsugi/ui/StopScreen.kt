@@ -31,13 +31,16 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -46,6 +49,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
+import dev.cantabile.tsugi.ui.theme.TsugiTheme
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.cantabile.tsugi.R
 import dev.cantabile.tsugi.data.Favourite
@@ -132,12 +139,16 @@ fun StopScreen(
             ) {
                 item {
                     Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(stop?.description ?: code, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            listOfNotNull(stop?.road, code).joinToString(" · "),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = colors.onSurfaceVariant,
-                        )
+                        if (TsugiTheme.isInk) {
+                            InkStopHeader(code, stop?.description ?: code, stop?.road)
+                        } else {
+                            Text(stop?.description ?: code, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                listOfNotNull(stop?.road, code).joinToString(" · "),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colors.onSurfaceVariant,
+                            )
+                        }
                         if (stations.isNotEmpty()) {
                             FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 stations.forEach { near -> StationChip(near.station, near.distanceM) { onOpenStation(near.station.codes.first()) } }
@@ -179,6 +190,22 @@ fun StopScreen(
     }
 }
 
+/**
+ * Ink & Paper's stop header: the name in Mincho, a short vermilion underline, then the road and
+ * code. The station and across-the-road chips below carry the rest.
+ */
+@Composable
+private fun InkStopHeader(code: String, name: String, road: String?) {
+    Text(name, style = MaterialTheme.typography.headlineLarge, fontSize = 34.sp, lineHeight = 40.sp)
+    Box(Modifier.padding(vertical = 2.dp).size(width = 48.dp, height = 3.dp).background(MaterialTheme.colorScheme.tertiary, RoundedCornerShape(2.dp)))
+    Text(
+        listOfNotNull(road, code).joinToString(" · "),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+}
+
 /** "Bugis MRT · 80 m" with its lines' colours; opens the station. */
 @Composable
 fun StationChip(station: Station, distanceM: Int?, onClick: () -> Unit) {
@@ -215,18 +242,25 @@ private fun SortToggle(sort: StopSort, onSort: (StopSort) -> Unit) {
     Row(Modifier.padding(top = 8.dp)) { Choices(StopSort.entries, sort, { it.label }, onSort) }
 }
 
-/** Wavy bar that fills up until the next 20 s refresh. */
+/**
+ * Wavy bar that fills up until the next 20 s refresh. The bar follows the frame clock so it glides;
+ * it's read only while drawing, so nothing recomposes per frame. The seconds label ticks with [now].
+ */
 @Composable
 private fun RefreshProgress(fetchedAt: Instant?, now: Instant) {
     val elapsed = fetchedAt?.let { Duration.between(it, now).toMillis() } ?: 0L
-    val progress = (elapsed.toFloat() / REFRESH_MS).coerceIn(0f, 1f)
+    var frameMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) withFrameMillis { frameMs = System.currentTimeMillis() }
+    }
+    val progress = { fetchedAt?.let { ((frameMs - it.toEpochMilli()).toFloat() / REFRESH_MS).coerceIn(0f, 1f) } ?: 0f }
     val remaining = ((REFRESH_MS - elapsed) / 1000).coerceAtLeast(0)
     Row(
         Modifier.fillMaxWidth().padding(top = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        LinearWavyProgressIndicator(progress = { progress }, modifier = Modifier.weight(1f))
+        LinearWavyProgressIndicator(progress = progress, modifier = Modifier.weight(1f))
         Text(
             if (fetchedAt == null) "…" else "${remaining}s",
             style = MaterialTheme.typography.labelMedium,
@@ -249,13 +283,21 @@ private fun ServiceCard(
     onOpenRoute: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
+    val ink = TsugiTheme.isInk
     val running = service.buses.isNotEmpty()
-    Surface(modifier = modifier, shape = RoundedCornerShape(24.dp), color = colors.surfaceContainer) {
+    val ended = ink && endedForToday(service)
+    Surface(
+        modifier = modifier.then(if (ended) Modifier.alpha(ENDED_ALPHA) else Modifier),
+        shape = RoundedCornerShape(if (ink) 22.dp else 24.dp),
+        color = colors.surfaceContainer,
+        border = cardBorder(),
+    ) {
         Column(Modifier.padding(start = 12.dp, end = 8.dp, top = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 ServiceBadge(
                     service.serviceNo,
                     active = running,
+                    filled = true,
                     modifier = Modifier.clip(RoundedCornerShape(14.dp)).clickable(onClickLabel = "Show route", onClick = onOpenRoute),
                 )
                 Column(Modifier.weight(1f)) {
@@ -294,7 +336,7 @@ private fun ServiceCard(
             }
             if (!running && service.firstBus != null) {
                 Text(
-                    "First bus ${service.firstBus}",
+                    if (ended) "Service ended for today · first bus ${service.firstBus}" else "First bus ${service.firstBus}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = colors.onSurfaceVariant,
                     modifier = Modifier.padding(start = 4.dp),
@@ -311,9 +353,9 @@ private fun ServiceCard(
                 }
             }
             if (running) {
-                Row(Modifier.padding(end = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(Modifier.padding(end = 4.dp), horizontalArrangement = Arrangement.spacedBy(if (ink) 6.dp else 4.dp)) {
                     service.buses.forEachIndexed { i, bus ->
-                        ArrivalTile(bus, now, rowShape(i, 3), Modifier.weight(1f))
+                        ArrivalTile(bus, now, if (ink) RoundedCornerShape(12.dp) else rowShape(i, 3), Modifier.weight(1f))
                     }
                     repeat(3 - service.buses.size) { Box(Modifier.weight(1f)) }
                 }

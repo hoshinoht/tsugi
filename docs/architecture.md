@@ -13,7 +13,7 @@ Tsugi is a single-module app with no navigation, dependency-injection or image l
 | `withTimetable` | `data/Timetable.kt` | Fills a stop's live services from the timetable: missing services, first and last bus (public holidays run Sunday's), frequency |
 | `stopsAway` | `data/StopsAway.kt` | Snaps a bus's reported position to its route to count stops to yours |
 | `searchStops` | `data/StopSearch.kt` | Stop search with LTA abbreviations, any word order and one-typo tolerance |
-| `SettingsRepository` | `data/SettingsRepository.kt` | Theme, Nearby radius, stop order, alert lead time, card order, recent stops |
+| `SettingsRepository` | `data/SettingsRepository.kt` | Theme, colourway, Nearby radius, stop order, alert lead time, card order, recent stops |
 | `pickNextUp` | `data/NextUp.kt` | Chooses the Next up bus: nearest saved stop, then a catchable bus (pure function, unit-tested) |
 | `FavouritesRepository` | `data/FavouritesRepository.kt` | Saved stops, buses and places as one JSON list in DataStore |
 | `LocationProvider` | `data/LocationProvider.kt` | Platform `LocationManager` (fused provider where available) |
@@ -51,4 +51,8 @@ From 840 dp wide, the tabs sit in a 400 dp pane on the left and the top layer sh
 
 ## Theme and motion
 
-`TsugiTheme` uses `MaterialExpressiveTheme` with the dynamic (wallpaper) colour scheme and `MotionScheme.expressive()`. The countdown morphs between `MaterialShapes.Cookie9Sided` and `SoftBurst`; arrival times use `RollingText`. Decorative spinning stops when system animations are turned off. MRT line and crowding colours are fixed rather than themed. The toolbar has three fixed-width slots with a sliding highlight, so it never resizes when switching tabs.
+`TsugiTheme` takes the stored `Colourway`. The traditional colourways (`ui/theme/Colourways.kt`) map an `InkPalette` onto M3 colour roles and use `InkTypography`, which sets display, headline and large title styles in a bundled subset of Zen Old Mincho. Wallpaper uses the dynamic colour scheme and the default typography. Either way it is `MaterialExpressiveTheme` with `MotionScheme.expressive()`.
+
+`TsugiTheme` also provides a `TsugiStyle` (`Ink` or `Expressive`) through `LocalTsugiStyle`. Shared components branch on it (`TsugiTheme.isInk`) for Ink & Paper's bordered cards, badges, "Now" and the brush route in `InkRoute.kt`; screens keep their logic. `ColourwayContrastTest` checks every Ink scheme against WCAG AA.
+
+In Expressive, the countdown morphs between `MaterialShapes.Cookie9Sided` and `SoftBurst`; arrival times use `RollingText`. Decorative spinning stops when system animations are turned off. MRT line and crowding colours are fixed rather than themed. The toolbar has three fixed-width slots with a sliding highlight, so it never resizes when switching tabs.

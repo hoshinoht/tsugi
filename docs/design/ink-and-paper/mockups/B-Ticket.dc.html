@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ink and Paper Widgets</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@6..144,400..800&amp;family=Zen+Old+Mincho:wght@600;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; position: relative; overflow: hidden; background: linear-gradient(180deg, #2F3E6E 0%, #1E2433 100%); color: #ECE5D6; font-family: 'Google Sans Flex', system-ui, sans-serif; padding: 18px 16px; display: flex; flex-direction: column; gap: 18px;">
+
+  <div style="display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 600; padding: 0 6px;">
+    <span>9:41</span>
+    <span style="height: 24px; padding: 0 10px; border-radius: 12px; background: #FFFDF8; color: #1E2433; display: inline-flex; align-items: center; gap: 6px; font-weight: 700;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 3h12a2 2 0 0 1 2 2v11a2 2 0 0 1-1 1.7V20a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H8v1a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-2.3A2 2 0 0 1 4 16V5a2 2 0 0 1 2-2zm0 3v5h12V6zm1.5 7.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm9 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"></path></svg>32 · 3m
+    </span>
+  </div>
+
+  <span style="font-size: 12px; letter-spacing: 2px; color: #AEB6D0; padding: 0 6px;">HOME SCREEN · 切符 TICKET WIDGET</span>
+
+  <section aria-label="Ticket widget" style="position: relative; display: flex; border-radius: 22px; background: #FFFDF8; color: #1E2433; overflow: hidden; box-shadow: 0 10px 24px rgba(0,0,0,0.3);">
+    <div style="width: 78px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: #F6F1E7; border-right: 2px dashed #D8CFBE;">
+      <span style="position: relative; width: 48px; height: 48px;"><svg width="48" height="48" viewBox="0 0 116 116" aria-hidden="true" style="position: absolute; inset: 0;"><path d="{{cookie}}" fill="#2F3E6E"></path></svg><span style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;"><svg width="22" height="22" viewBox="0 0 24 24" fill="#FFFDF8" aria-hidden="true"><path d="M6 3h12a2 2 0 0 1 2 2v11a2 2 0 0 1-1 1.7V20a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H8v1a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-2.3A2 2 0 0 1 4 16V5a2 2 0 0 1 2-2zm0 3v5h12V6zm1.5 7.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm9 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"></path></svg></span></span>
+      <span style="font-size: 10px; letter-spacing: 1.5px; color: #5B6170;">01113</span>
+    </div>
+    <div style="flex: 1; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;">
+      <span style="font-family: 'Zen Old Mincho', serif; font-weight: 900; font-size: 17px;">Bugis Stn Exit A</span>
+      <sc-for list="{{rows}}" as="r" hint-placeholder-count="3">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="min-width: 40px; height: 30px; border-radius: 10px; background: #E7EAF3; color: #2F3E6E; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px;">{{r.svc}}</span>
+          <span style="flex: 1; font-size: 13px; font-weight: 600;">{{r.dest}}</span>
+          <span style="font-family: 'Zen Old Mincho', serif; font-weight: 900; font-size: 20px; color: {{r.color}};">{{r.when}}</span>
+        </div>
+      </sc-for>
+    </div>
+    <span aria-hidden="true" style="position: absolute; left: 68px; top: -10px; width: 20px; height: 20px; border-radius: 10px; background: #2F3E6E;"></span>
+    <span aria-hidden="true" style="position: absolute; left: 68px; bottom: -10px; width: 20px; height: 20px; border-radius: 10px; background: #253055;"></span>
+  </section>
+
+  <span style="font-size: 12px; letter-spacing: 2px; color: #AEB6D0; padding: 6px 6px 0 6px;">LIVE UPDATE · TRACKING</span>
+
+  <section aria-label="Live update" style="border-radius: 24px; background: #FFFDF8; color: #1E2433; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <svg width="22" height="22" viewBox="0 0 116 116" aria-hidden="true"><path d="{{cookie}}" fill="#2F3E6E"></path></svg>
+      <span style="font-size: 12px; color: #5B6170; flex: 1;">Tsugi · now</span>
+    </div>
+    <div style="display: flex; align-items: baseline; gap: 8px;">
+      <span style="font-size: 17px; font-weight: 700; flex: 1;">32 to Bedok Int</span>
+      <span style="font-family: 'Zen Old Mincho', serif; font-weight: 900; font-size: 30px; line-height: 30px;">3</span>
+      <span style="font-size: 13px; color: #5B6170;">min</span>
+    </div>
+    <svg width="326" height="22" viewBox="0 0 326 22" role="img" aria-label="Bus is 2 stops away">
+      <path d="M8 11H318" stroke="#E2DACB" stroke-width="4" stroke-linecap="round"></path>
+      <path d="M8 11H150" stroke="#1E2433" stroke-width="4" stroke-linecap="round"></path>
+      <circle cx="8" cy="11" r="5" fill="#1E2433"></circle>
+      <circle cx="80" cy="11" r="5" fill="#1E2433"></circle>
+      <circle cx="235" cy="11" r="5" fill="#FFFDF8" stroke="#1E2433" stroke-width="2.5"></circle>
+      <circle cx="318" cy="11" r="8" fill="{{vermilion}}"></circle>
+      <circle cx="150" cy="11" r="10" fill="#2F3E6E"></circle><circle cx="150" cy="11" r="4" fill="#FFFDF8"></circle>
+    </svg>
+    <span style="font-size: 13px; color: #5B6170;">2 stops away · seats available · leave in 1 min</span>
+  </section>
+
+  <span style="font-size: 12px; letter-spacing: 2px; color: #AEB6D0; padding: 6px 6px 0 6px;">ARRIVAL ALERT</span>
+
+  <section aria-label="Arrival alert" style="border-radius: 24px; background: #FFFDF8; color: #1E2433; padding: 14px 16px; display: flex; align-items: center; gap: 14px;">
+    <span style="position: relative; width: 52px; height: 52px; flex-shrink: 0;"><svg width="52" height="52" viewBox="0 0 116 116" aria-hidden="true" style="position: absolute; inset: 0;"><path d="{{cookie}}" fill="{{vermilion}}"></path></svg><span style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #FFFDF8; font-weight: 800; font-size: 18px;">32</span></span>
+    <span style="display: flex; flex-direction: column; gap: 2px;">
+      <span style="font-size: 16px; font-weight: 700;">Your 32 is here</span>
+      <span style="font-size: 13px; color: #5B6170;">Bugis Stn Exit A · next one in 15 min</span>
+    </span>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"vermilion":{"editor":"color","default":"#C8402B","options":["#C8402B","#2F3E6E","#3C7A5A"]},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    let d = '';
+    for (let i = 0; i <= 180; i++) {
+      const a = (i / 180) * Math.PI * 2 - Math.PI / 2;
+      const r = 52 + 4 * Math.cos(9 * a);
+      d += (i ? 'L' : 'M') + (58 + r * Math.cos(a)).toFixed(2) + ' ' + (58 + r * Math.sin(a)).toFixed(2);
+    }
+    const vermilion = this.props.vermilion ?? '#C8402B';
+    const r = (svc, dest, when) => ({ svc, dest, when, color: when === 'Now' ? vermilion : '#1E2433' });
+    return { vermilion, cookie: d + 'Z', rows: [r('61', 'Eunos Int', 'Now'), r('32', 'Bedok Int', '3'), r('33', 'Bedok Int', '4')] };
+  }
+}
+</script>
+</body>
+</html>

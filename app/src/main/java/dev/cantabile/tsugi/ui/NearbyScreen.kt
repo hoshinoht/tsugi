@@ -172,6 +172,7 @@ private fun NearbyStopCard(
         shape = RoundedCornerShape(if (isOpen) 28.dp else 22.dp),
         color = if (isOpen) colors.surfaceContainerHigh else colors.surfaceContainer,
         modifier = Modifier.animateContentSize(),
+        border = cardBorder(),
     ) {
         Column(Modifier.padding(start = 18.dp, end = 14.dp, top = 14.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {

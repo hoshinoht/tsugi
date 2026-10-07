@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ink and Paper Colourways</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@6..144,400..800&amp;family=Zen+Old+Mincho:wght@600;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 840px; height: 900px; box-sizing: border-box; background: #EFEBE3; color: #1E2433; font-family: 'Google Sans Flex', system-ui, sans-serif; padding: 24px; display: flex; flex-direction: column; gap: 18px;">
+  <header style="display: flex; flex-direction: column; gap: 2px;">
+    <span style="font-family: 'Zen Old Mincho', serif; font-weight: 900; font-size: 26px;">B · Colourways · 伝統色</span>
+    <span style="font-size: 14px; color: #5B6170;">Traditional Japanese colours. Each sets the paper, the ink, the badge and the arriving colour; the last is the night paper.</span>
+  </header>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px;">
+    <sc-for list="{{ways}}" as="w" hint-placeholder-count="6">
+      <section aria-label="{{w.name}}" style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; align-items: baseline; gap: 8px;">
+          <span style="font-family: 'Zen Old Mincho', serif; font-weight: 900; font-size: 22px;">{{w.kanji}}</span>
+          <span style="font-weight: 700; font-size: 15px; flex: 1;">{{w.name}}</span>
+          <span style="font-size: 12px; color: #5B6170;">{{w.note}}</span>
+        </div>
+
+        <div style="border-radius: 22px; background: {{w.paper}}; color: {{w.ink}}; padding: 14px 12px 12px 12px; display: flex; flex-direction: column; gap: 10px; outline: 1px solid {{w.line}};">
+          <span style="display: flex; flex-direction: column; gap: 3px; padding-left: 4px;">
+            <span style="font-family: 'Zen Old Mincho', serif; font-weight: 900; font-size: 20px;">Tsugi</span>
+            <svg width="54" height="6" viewBox="0 0 54 6" aria-hidden="true"><path d="M2 4 C 14 1, 30 5, 52 2" fill="none" stroke="{{w.stamp}}" stroke-width="3" stroke-linecap="round"></path></svg>
+          </span>
+
+          <div style="border-radius: 18px; background: {{w.card}}; border: 1px solid {{w.line}}; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="position: relative; width: 42px; height: 42px; flex-shrink: 0;">
+                <svg width="42" height="42" viewBox="0 0 116 116" aria-hidden="true" style="position: absolute; inset: 0;"><path d="{{cookie}}" fill="{{w.badge}}"></path></svg>
+                <span style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: {{w.onBadge}}; font-weight: 800; font-size: 15px;">32</span>
+              </span>
+              <span style="flex: 1; display: flex; flex-direction: column; min-width: 0;">
+                <span style="font-weight: 700; font-size: 14px;">Bedok Int</span>
+                <span style="font-size: 11px; color: {{w.muted}};">2 stops away</span>
+              </span>
+              <span style="font-family: 'Zen Old Mincho', serif; font-weight: 900; font-size: 30px; line-height: 30px;">3</span>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 16px; background: {{w.card}}; border: 1px solid {{w.line}};">
+            <span style="min-width: 34px; height: 28px; border-radius: 10px; background: {{w.chip}}; color: {{w.chipInk}}; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px;">61</span>
+            <span style="flex: 1; font-size: 13px; font-weight: 600;">Eunos Int</span>
+            <span style="display: inline-flex; align-items: center; gap: 6px; color: {{w.stamp}};" aria-label="Arriving now"><span style="width: 8px; height: 8px; border-radius: 4px; background: {{w.stamp}};"></span><span style="font-family: 'Zen Old Mincho', serif; font-weight: 900; font-size: 17px;">Now</span></span>
+          </div>
+
+          <div style="align-self: center; display: flex; padding: 4px; border-radius: 20px; background: {{w.nav}};">
+            <span style="width: 64px; height: 30px; border-radius: 15px; background: {{w.paper}}; color: {{w.ink}}; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px;">Saved</span>
+            <span style="width: 64px; height: 30px; color: {{w.navInk}}; display: flex; align-items: center; justify-content: center; font-size: 11px;">Nearby</span>
+            <span style="width: 64px; height: 30px; color: {{w.navInk}}; display: flex; align-items: center; justify-content: center; font-size: 11px;">Search</span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 6px;">
+          <sc-for list="{{w.sw}}" as="s" hint-placeholder-count="4">
+            <span style="flex: 1; height: 16px; border-radius: 5px; background: {{s}}; outline: 1px solid rgba(0,0,0,0.08);"></span>
+          </sc-for>
+        </div>
+      </section>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":840,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    let d = '';
+    for (let i = 0; i <= 180; i++) {
+      const a = (i / 180) * Math.PI * 2 - Math.PI / 2;
+      const r = 52 + 4 * Math.cos(9 * a);
+      d += (i ? 'L' : 'M') + (58 + r * Math.cos(a)).toFixed(2) + ' ' + (58 + r * Math.sin(a)).toFixed(2);
+    }
+    const way = (kanji, name, note, paper, card, ink, muted, line, badge, onBadge, chip, chipInk, stamp, nav, navInk) => ({
+      kanji, name, note, paper, card, ink, muted, line, badge, onBadge, chip, chipInk, stamp, nav, navInk,
+      sw: [paper, ink, badge, stamp]
+    });
+    return {
+      cookie: d + 'Z',
+      ways: [
+        way('藍', 'Ai', 'indigo · current', '#F6F1E7', '#FFFDF8', '#1E2433', '#5B6170', '#E2DACB', '#2F3E6E', '#FFFDF8', '#E7EAF3', '#2F3E6E', '#C8402B', '#1E2433', '#C9CDD8'),
+        way('抹茶', 'Matcha', 'tea green', '#EFF0E3', '#FCFDF6', '#1F2A22', '#5A6558', '#DCE0CC', '#4E6B3A', '#FCFDF6', '#E3EBD8', '#3E5A2C', '#B8452F', '#1F2A22', '#C7CFC2'),
+        way('桜', 'Sakura', 'cherry blossom', '#F8EFEF', '#FFFBFA', '#2A2026', '#6B5D63', '#EDDCDD', '#8E4A5E', '#FFFBFA', '#F3E1E6', '#7A3A4E', '#C23B5A', '#2A2026', '#D6C9CE'),
+        way('藤', 'Fuji', 'wisteria', '#F1EEF6', '#FCFBFE', '#221F33', '#625E74', '#E0DAEA', '#5B4E8C', '#FCFBFE', '#E6E1F2', '#4A3E7A', '#C8402B', '#221F33', '#CBC7D8'),
+        way('柿', 'Kaki', 'persimmon', '#F8EFE4', '#FFFAF3', '#2B211B', '#6C5E52', '#EADBC8', '#7A3B1E', '#FFFAF3', '#F3E1D2', '#6A3017', '#D2672A', '#2B211B', '#D8CCC0'),
+        way('墨', 'Sumi', 'night paper', '#14171E', '#1D222C', '#ECE5D6', '#9AA0AE', '#2C3240', '#8C9BD6', '#14171E', '#262C3A', '#C3CBEB', '#E0573F', '#ECE5D6', '#3A4152')
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

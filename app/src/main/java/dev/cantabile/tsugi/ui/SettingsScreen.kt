@@ -48,6 +48,7 @@ import dev.cantabile.tsugi.data.ThemeMode
 fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val theme by vm.theme.collectAsStateWithLifecycle()
+    val colourway by vm.colourway.collectAsStateWithLifecycle()
     val radius by vm.radiusM.collectAsStateWithLifecycle()
     val sort by vm.stopSort.collectAsStateWithLifecycle()
     val alert by vm.alertMinutes.collectAsStateWithLifecycle()
@@ -80,8 +81,9 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                Setting("Theme", "Follows your wallpaper colours in all three modes") {
+                Setting("Theme", "A traditional colourway on washi paper, or your wallpaper's colours. Each works light and dark.") {
                     Choices(ThemeMode.entries, theme, { it.label }, vm::setTheme)
+                    colourway?.let { ColourwayPicker(it, vm::setColourway) }
                 }
             }
             item {
@@ -131,11 +133,12 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
                 }
             }
             item {
-                Surface(shape = RoundedCornerShape(24.dp), color = colors.surfaceContainer) {
+                Surface(shape = RoundedCornerShape(24.dp), color = colors.surfaceContainer, border = cardBorder()) {
                     Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("Tsugi ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Text(
-                            "Bus and train data from LTA DataMall. Address search and maps by OneMap. Station locations from SG Rail Data. MIT licensed.",
+                            "Bus and train data from LTA DataMall. Address search and maps by OneMap. Station locations from SG Rail Data. " +
+                                "Zen Old Mincho by the Zen Old Mincho Project Authors, under the SIL Open Font License 1.1. MIT licensed.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = colors.onSurfaceVariant,
                         )
@@ -148,7 +151,7 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
 
 @Composable
 private fun Setting(title: String, description: String, control: @Composable () -> Unit) {
-    Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
+    Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainer, border = cardBorder()) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Column {
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)

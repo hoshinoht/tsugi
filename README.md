@@ -89,7 +89,8 @@
 
 ### Design
 
-- **Wallpaper colour:** dynamic colour throughout in light and dark, with fixed MRT line and crowding colours.
+- **Ink & Paper:** washi paper, sumi ink, Zen Old Mincho for titles and minutes, and one vermilion accent that only ever means a bus arriving now. Five traditional colourways (Ai, Matcha, Sakura, Fuji, Kaki), each with a night version, picked from a gallery in Settings. Routes are drawn as a brush line through the stops.
+- **Wallpaper colour:** the M3 Expressive look in dynamic colour, as a separate theme, with fixed MRT line and crowding colours.
 - **Wide screens:** on tablets and unfolded foldables the tabs stay on the left and what you open shows on the right.
 - **Expressive motion:**
   - The countdown morphs as the bus arrives, and times roll as they change.
@@ -194,4 +195,4 @@ Tsugi is not a journey planner, a navigation app, or an arrival predictor; it sh
 
 ## License
 
-[MIT](LICENSE). LTA DataMall and OneMap data are subject to their own terms of use. Station locations come from [SG Rail Data](https://github.com/cheeaun/sgraildata), compiled from LTA's geospatial datasets.
+[MIT](LICENSE). LTA DataMall and OneMap data are subject to their own terms of use. Station locations come from [SG Rail Data](https://github.com/cheeaun/sgraildata), compiled from LTA's geospatial datasets. Zen Old Mincho is © The Zen Old Mincho Project Authors under the [SIL Open Font License 1.1](app/src/main/assets/licences/zen-old-mincho-OFL.txt); the app bundles a subset made with `scripts/subset_mincho.sh`.

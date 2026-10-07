@@ -65,6 +65,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.cantabile.tsugi.R
+import dev.cantabile.tsugi.ui.theme.TsugiTheme
 
 /**
  * A full-screen layer over the tabs, saved as a string: "settings", "stop:<code>", "service:<no>",
@@ -275,8 +276,16 @@ private fun MainToolbar(
         expanded = true,
         modifier = modifier,
         scrollBehavior = scrollBehavior,
-        // Vibrant (primary-container) colours so the toolbar stands apart from the cards behind it.
-        colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
+        // Vibrant (primary-container) colours so the toolbar stands apart from the cards behind it;
+        // Ink & Paper inverts it to an ink pill.
+        colors = if (TsugiTheme.isInk) {
+            FloatingToolbarDefaults.standardFloatingToolbarColors(
+                toolbarContainerColor = MaterialTheme.colorScheme.inverseSurface,
+                toolbarContentColor = MaterialTheme.colorScheme.inverseOnSurface,
+            )
+        } else {
+            FloatingToolbarDefaults.vibrantFloatingToolbarColors()
+        },
     ) {
         TabSlots(current, onSelect)
     }
@@ -297,7 +306,8 @@ private fun TabSlots(current: Tab, onSelect: (Tab) -> Unit) {
                 .width(TAB_SLOT_WIDTH)
                 .fillMaxHeight()
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary),
+                // Ink & Paper's active slot is a paper pill on the ink toolbar.
+                .background(if (TsugiTheme.isInk) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary),
         )
         Row {
             Tab.entries.forEach { t -> TabSlot(t, selected = t == current, onClick = { onSelect(t) }) }
@@ -310,7 +320,8 @@ private fun TabSlot(tab: Tab, selected: Boolean, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val motion = MaterialTheme.motionScheme
     val idle = LocalContentColor.current
-    val content by animateColorAsState(if (selected) colors.onPrimary else idle, motion.defaultEffectsSpec(), label = "tabContent")
+    val selectedContent = if (TsugiTheme.isInk) colors.onSurface else colors.onPrimary
+    val content by animateColorAsState(if (selected) selectedContent else idle, motion.defaultEffectsSpec(), label = "tabContent")
     Row(
         Modifier
             .width(TAB_SLOT_WIDTH)

@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Ink & Paper:** a new look on washi paper with sumi ink. Titles, stop names and minutes are set in Zen Old Mincho; cards have a thin border instead of a shadow. A bus arriving now shows a vermilion dot and "Now", the only use of the accent colour.
+- **Colourways:** Settings › Theme has a gallery of five traditional colours (藍 Ai, 抹茶 Matcha, 桜 Sakura, 藤 Fuji, 柿 Kaki), each with a night version on 墨 Sumi paper, plus Wallpaper for the dynamic-colour look. Light, dark and system still apply to all of them.
+- **Brush route:** with a colourway, a service's route is a straight brush line through its stops: solid ink up to the bus, a pale wash after it, passed stops faded, and your stop marked "You board here".
+- Services that have ended for the night are dimmed and say so.
+
+### Changed
+
+- New installs start on Ai. Existing installs keep Wallpaper until changed in Settings.
+
 ## 0.3.0
 
 ### Added
